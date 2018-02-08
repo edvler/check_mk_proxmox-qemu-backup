@@ -1,0 +1,25 @@
+#!/bin/sh
+
+# Author: Matthias Maderer
+# E-Mail: edvler@edvler-blog.de
+# URL: https://github.com/edvler/check_mk_proxmox-qemu-backup
+# License: See https://github.com/edvler/check_mk_proxmox-qemu-backup
+
+
+QEMU_SERVER_DIR=/etc/pve/qemu-server/
+VZDUMP_LOG_DIR=/var/log/vzdump/
+
+echo '<<<proxmox-qemu-backup>>>'
+
+#get all proxmox qemu machines
+QEMU_MACHINES=$(find $QEMU_SERVER_DIR -type f)
+for qemu in $QEMU_MACHINES; do
+        QEMU_MACHINE_NAME=$(cat $qemu|grep name:|awk '{print $2}')
+        if [ -z "$QEMU_MACHINE_NAME" ]; then
+                QEMU_MACHINE_NAME="NO-NAME"
+        fi
+        echo "QEMU-MACHINE;;;;;$qemu;;;;;$QEMU_MACHINE_NAME"
+done
+
+#Content of all vzdump logfiles, with filename prefixed
+awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* |grep -v sparse
