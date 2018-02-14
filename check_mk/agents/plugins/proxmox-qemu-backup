@@ -5,7 +5,6 @@
 # URL: https://github.com/edvler/check_mk_proxmox-qemu-backup
 # License: See https://github.com/edvler/check_mk_proxmox-qemu-backup
 
-
 QEMU_SERVER_DIR=/etc/pve/qemu-server/
 VZDUMP_LOG_DIR=/var/log/vzdump/
 

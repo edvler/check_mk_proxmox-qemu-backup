@@ -33,7 +33,6 @@ def check_qemu_backup(item, params, info):
    if not 'running_time' in params:
         params['running_time'] = 1800
 
-
    #return 0 if check of backups should not be done
    if params['check_backup'] == 'ignore':
         return 0, "Backups of this QEMU guest not checked!"

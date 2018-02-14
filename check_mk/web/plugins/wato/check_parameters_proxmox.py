@@ -37,4 +37,3 @@ register_check_parameters(
     ),
     match_type = "dict",
 )
-
