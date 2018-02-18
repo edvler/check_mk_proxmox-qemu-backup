@@ -128,7 +128,7 @@ def check_qemu_backup(item, params, info):
         else:
                 return 1, 'Backup is running since ' + str(startdate)
 
-   return 3, "Error occured in check plugin. Please post details on github"
+   return 3, "Error occured in check plugin. Please post a issue on https://github.com/edvler/check_mk_proxmox-qemu-backup/issues inlcuding the output of the agent plugin /usr/lib/check_mk_agent/plugins/proxmox-qemu-backup"
 
 # declare the check to Check_MK
 check_info["proxmox-qemu-backup"] = {
