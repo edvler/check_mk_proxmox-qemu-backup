@@ -1,0 +1,280 @@
+#!/usr/bin/python
+
+# Author: Matthias Maderer
+# E-Mail: edvler@edvler-blog.de
+# URL: https://github.com/edvler/check_mk_proxmox-qemu-backup
+# License: GPLv2
+
+
+# default parameters
+proxmox_qemu_backup_default_levels = {'check_backup': 'check', 'backup_age': (93600, 108000), 'running_time': 1800}
+
+# the inventory function (dummy)
+def inventory_qemu_backup(info):
+    # loop over all output lines of the agent
+    for line in info:
+        if line[0].startswith('QEMU-MACHINE;;;;;'):
+            arr_qemu_vars = line[0].split(';;;;;')
+            arr_qemu_id = arr_qemu_vars[1].split('/')
+            qemu_id = arr_qemu_id[-1].replace('.conf','')
+            yield arr_qemu_vars[2] + " Id: " + qemu_id + "", "proxmox_qemu_backup_default_levels"
+
+# the check function (dummy)
+def check_qemu_backup(item, params, info):
+    #return 0 if check of backups should not be done
+    if params['check_backup'] == 'ignore':
+        return 0, 'check disabled by rule'
+
+    #get name of the logfile (the output of each logfile is
+    #prefixed with its filename from the plugin)
+    qemu_id=item.split(' ')[-1]
+    logfile = '/var/log/vzdump/qemu-' + qemu_id + '.log'
+
+    #counter
+    line_count=0
+    warn_count=0
+    error_count=0
+
+    archive="nothing"
+    finished="nothing"
+    started="nothing"
+    file_created="nothing"
+
+    offset=0
+
+    #check all lines
+    for line in info:
+        #is this line of the given item (qemu_id)
+        if line[0] == logfile:
+            line_count += 1 #count lines of log for this id
+
+            #old or new dateformat in logfile?
+            #old /var/log/vzdump/qemu-104.log Feb 07 12:10:54 INFO: creating archive '/vmfs/bkp-fs-stor-001/dump/vzdump-qemu-104-2018_02_07-12_10_54.vma.gz'
+            #new /var/log/vzdump/qemu-105.log 2018-02-06 16:00:03 INFO: creating archive '/vmfs/bkp-urbackup01-001/dump/vzdump-qemu-105-2018_02_06-16_00_02.vma.gz'
+            try:
+                d = time.strptime(line[1]  + ' ' + line[2],"%Y-%m-%d %H:%M:%S")
+                offset=0
+            except ValueError:
+                offset=1
+
+            try:
+                #extract several infos
+                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] == 'INFO: creating archive':
+                    file_created = line
+
+                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: archive file size:':
+                    archive = line
+
+                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Starting Backup of VM':
+                    started = line
+
+                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Finished Backup of VM':
+                    finished = line
+
+            except IndexError:
+                pass
+
+            #search for keywords
+            for content in line:
+                if 'warn' in content.lower():
+                    warn_count += 1
+                elif 'error' in content.lower() or 'fail' in content.lower():
+                    error_count += 1
+
+    #if line_count is 0, no backup file exists --> error!
+    if line_count == 0:
+        return 2, "no backup exists for this VM guest"
+
+    #check counter
+    if error_count > 0:
+        return 2, 'errors found in logfile ' + logfile
+    if warn_count > 0:
+        return 1, 'warnings found in logfile ' + logfile
+
+    #no warnings and erros!! check if lines indicating a successfull backup exists
+    if archive != "nothing" and finished != "nothing" and started != "nothing" and file_created != "nothing":
+        startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
+
+        old = time.time() - time.mktime(startdate)
+        duration_formatted = pretty_time_delta(old)
+        infotext = 'last backup from: ' + time.strftime("%Y-%m-%d %H:%M", startdate) + ' (' + duration_formatted + ' ago)'
+
+        warn, error = params['backup_age']
+
+        if old >= error:
+            return 2, infotext
+        if old >= warn:
+            return 1, infotext
+
+        return 0, infotext
+
+    #is backup currently running?
+    if archive == "nothing" and finished == "nothing" and started != "nothing" and file_created != "nothing":
+        startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
+        old = time.time() - time.mktime(startdate)
+        if old < params['running_time']:
+            return 0, 'backup is running since ' + time.strftime("%Y-%m-%d %H:%M", startdate)
+        else:
+            return 1, 'backup is running since ' + time.strftime("%Y-%m-%d %H:%M", startdate)
+
+    return 3, "error occured in check plugin. Please post a issue on https://github.com/edvler/check_mk_proxmox-qemu-backup/issues inlcuding the output of the agent plugin /usr/lib/check_mk_agent/plugins/proxmox-qemu-backup"
+
+# declare the check to Check_MK
+check_info["proxmox_qemu_backup"] = {
+    'check_function':            check_qemu_backup,
+    'inventory_function':        inventory_qemu_backup,
+    'service_description':       'Proxmox VM backup',
+    'group':                     'proxmox',
+}
+
+def getDateFromFileCreated(vma_name):
+    p = re.compile("(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
+    m = p.search(vma_name)
+    d = time.strptime(m.group(1),"%Y_%m_%d-%H_%M_%S")
+    return d
+
+#thanks to https://gist.github.com/thatalextaylor/7408395
+def pretty_time_delta(seconds):
+    sign_string = '-' if seconds < 0 else ''
+    seconds = abs(int(seconds))
+    days, seconds = divmod(seconds, 86400)
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+    if days > 0:
+        return '%s%d days %d hours %d minutes' % (sign_string, days, hours, minutes)
+    elif hours > 0:
+        return '%s%d hours %d minutes' % (sign_string, hours, minutes)
+    elif minutes > 0:
+        return '%s%d minutes' % (sign_string, minutes)
+    else:
+        return '0 minutes'
+
+#Example output of agent
+#
+#root@pve01:/usr/lib/check_mk_agent/plugins# ./proxmox_qemu_backup
+#<<<proxmox_qemu_backup>>>
+#QEMU-MACHINE;;;;;/etc/pve/qemu-server/103.conf;;;;;server01-hlds
+#QEMU-MACHINE;;;;;/etc/pve/qemu-server/102.conf;;;;;firewall01
+#QEMU-MACHINE;;;;;/etc/pve/qemu-server/108.conf;;;;;monitoring01
+#QEMU-MACHINE;;;;;/etc/pve/qemu-server/101.conf;;;;;guacamole01
+#QEMU-MACHINE;;;;;/etc/pve/qemu-server/100.conf;;;;;pfsense01
+#QEMU-MACHINE;;;;;/etc/pve/qemu-server/106.conf;;;;;server02
+#QEMU-MACHINE;;;;;/etc/pve/qemu-server/105.conf;;;;;urbackup01
+#QEMU-MACHINE;;;;;/etc/pve/qemu-server/104.conf;;;;;zbox
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:45:02 INFO: Starting Backup of VM 100 (qemu)
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:45:02 INFO: status = stopped
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:45:02 INFO: update VM 100: -lock backup
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:45:02 INFO: backup mode: stop
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:45:02 INFO: ionice priority: 7
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:45:02 INFO: VM Name: pfsense01
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:45:02 INFO: include disk 'virtio0' 'WDC15EADS-tpool-001:vm-100-disk-1' 32G
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:45:04 INFO: creating archive '/vmfs/bkp-vol-001/dump/vzdump-qemu-100-2017_09_05-11_45_02.vma.gz'
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:45:04 INFO: starting kvm to execute backup task
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:45:06 INFO: started backup task 'bb24a1d8-e70a-4cda-a10e-86adb9dab94d'
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:46:35 INFO: transferred 34359 MB in 89 seconds (386 MB/s)
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:46:35 INFO: stopping kvm after backup task
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:46:36 INFO: archive file size: 686MB
+#/var/log/vzdump/qemu-100.log 2017-09-05 11:46:36 INFO: Finished Backup of VM 100 (00:01:34)
+#/var/log/vzdump/qemu-101.log Apr 06 11:46:34 INFO: Starting Backup of VM 101 (qemu)
+#/var/log/vzdump/qemu-101.log Apr 06 11:46:34 INFO: status = stopped
+#/var/log/vzdump/qemu-101.log Apr 06 11:46:34 INFO: update VM 101: -lock backup
+#/var/log/vzdump/qemu-101.log Apr 06 11:46:35 INFO: backup mode: stop
+#/var/log/vzdump/qemu-101.log Apr 06 11:46:35 INFO: ionice priority: 7
+#/var/log/vzdump/qemu-101.log Apr 06 11:46:35 INFO: VM Name: guacamole01
+#/var/log/vzdump/qemu-101.log Apr 06 11:46:35 INFO: include disk 'sata0' 'WDC15EADS-tpool-001:vm-101-disk-1'
+#/var/log/vzdump/qemu-101.log Apr 06 11:46:35 INFO: creating archive '/vmfs/usbbac001-fs-backup-001/dump/vzdump-qemu-101-2017_04_06-11_46_34.vma.gz'
+#/var/log/vzdump/qemu-101.log Apr 06 11:46:35 INFO: starting kvm to execute backup task
+#/var/log/vzdump/qemu-101.log Apr 06 11:46:38 INFO: started backup task '78127b22-7948-4555-8c48-10b8f3d01ce5'
+#/var/log/vzdump/qemu-101.log Apr 06 11:59:11 INFO: transferred 54760 MB in 753 seconds (72 MB/s)
+#/var/log/vzdump/qemu-101.log Apr 06 11:59:11 INFO: stopping kvm after backup task
+#/var/log/vzdump/qemu-101.log Apr 06 11:59:12 INFO: archive file size: 1.41GB
+#/var/log/vzdump/qemu-101.log Apr 06 11:59:12 INFO: delete old backup '/vmfs/usbbac001-fs-backup-001/dump/vzdump-qemu-101-2017_03_14-11_46_37.vma.gz'
+#/var/log/vzdump/qemu-101.log Apr 06 11:59:13 INFO: Finished Backup of VM 101 (00:12:39)
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:46:36 INFO: Starting Backup of VM 102 (qemu)
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:46:36 INFO: status = stopped
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:46:36 INFO: update VM 102: -lock backup
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:46:36 INFO: backup mode: stop
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:46:36 INFO: ionice priority: 7
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:46:36 INFO: VM Name: firewall01
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:46:36 INFO: include disk 'sata0' 'ssd-850evo-tpool-001:vm-102-disk-2' 9G
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:46:36 INFO: creating archive '/vmfs/bkp-vol-001/dump/vzdump-qemu-102-2017_09_05-11_46_36.vma.gz'
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:46:36 INFO: starting kvm to execute backup task
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:46:38 INFO: started backup task '0ca8bbd7-65cb-4443-8743-0f2074fa736d'
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:50:29 INFO: transferred 9663 MB in 231 seconds (41 MB/s)
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:50:29 INFO: stopping kvm after backup task
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:50:30 INFO: archive file size: 1.95GB
+#/var/log/vzdump/qemu-102.log 2017-09-05 11:50:30 INFO: Finished Backup of VM 102 (00:03:54)
+#/var/log/vzdump/qemu-103.log 2017-09-05 11:50:30 INFO: Starting Backup of VM 103 (qemu)
+#/var/log/vzdump/qemu-103.log 2017-09-05 11:50:30 INFO: status = stopped
+#/var/log/vzdump/qemu-103.log 2017-09-05 11:50:31 INFO: update VM 103: -lock backup
+#/var/log/vzdump/qemu-103.log 2017-09-05 11:50:31 INFO: backup mode: stop
+#/var/log/vzdump/qemu-103.log 2017-09-05 11:50:31 INFO: ionice priority: 7
+#/var/log/vzdump/qemu-103.log 2017-09-05 11:50:31 INFO: VM Name: server01-hlds
+#/var/log/vzdump/qemu-103.log 2017-09-05 11:50:31 INFO: include disk 'sata0' 'WDC15EADS-tpool-001:vm-103-disk-2' 101G
+#/var/log/vzdump/qemu-103.log 2017-09-05 11:50:33 INFO: creating archive '/vmfs/bkp-vol-001/dump/vzdump-qemu-103-2017_09_05-11_50_30.vma.gz'
+#/var/log/vzdump/qemu-103.log 2017-09-05 11:50:33 INFO: starting kvm to execute backup task
+#/var/log/vzdump/qemu-103.log 2017-09-05 11:50:36 INFO: started backup task 'fe948ba6-3b3a-4737-b9c2-1419864e6fe4'
+#/var/log/vzdump/qemu-103.log 2017-09-05 13:02:25 INFO: transferred 108447 MB in 4309 seconds (25 MB/s)
+#/var/log/vzdump/qemu-103.log 2017-09-05 13:02:25 INFO: stopping kvm after backup task
+#/var/log/vzdump/qemu-103.log 2017-09-05 13:02:28 INFO: archive file size: 33.09GB
+#/var/log/vzdump/qemu-103.log 2017-09-05 13:02:28 INFO: Finished Backup of VM 103 (01:11:58)
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:02 INFO: Starting Backup of VM 104 (qemu)
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:02 INFO: status = running
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: update VM 104: -lock backup
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: VM Name: zbox
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: exclude disk 'virtio0' 'ssd-850evo-tpool-001:vm-104-disk-1' (backup=no)
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: exclude disk 'virtio1' 'ST2000DM-tpool-001:vm-104-disk-4' (backup=no)
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: exclude disk 'virtio2' 'ST2000DM-tpool-001:vm-104-disk-1' (backup=no)
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: exclude disk 'virtio3' 'ST2000DM-tpool-001:vm-104-disk-2' (backup=no)
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: exclude disk 'virtio15' 'bkp-zbox-wss-001:104/vm-104-disk-1.raw' (backup=no)
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: backup mode: snapshot
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: ionice priority: 7
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: pending configuration changes found (not included into backup)
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: creating archive '/vmfs/bkp-vol-001/dump/vzdump-qemu-104-2018_02_22-14_11_02.vma.gz'
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: backup contains no disks
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: starting template backup
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: /usr/bin/vma create -v -c /vmfs/bkp-vol-001/dump/vzdump-qemu-104-2018_02_22-14_11_02.tmp/qemu-server.conf exec:gzip > /vmfs/bkp-vol-001/dump/vzdump-qemu-104-2018_02_22-14_11_02.vma.dat
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:04 INFO: archive file size: 0KB
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:04 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-qemu-104-2018_02_13-14_11_02.vma.gz'
+#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:04 INFO: Finished Backup of VM 104 (00:00:02)
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: Starting Backup of VM 105 (qemu)
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: status = running
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: update VM 105: -lock backup
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: VM Name: urbackup01
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: include disk 'virtio0' 'WDC15EADS-tpool-001:vm-105-disk-1' 32G
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: exclude disk 'virtio1' 'bkp-urbackup01-001:105/vm-105-disk-1.qcow2' (backup=no)
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:03 INFO: backup mode: snapshot
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:03 INFO: ionice priority: 7
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:03 INFO: creating archive '/vmfs/bkp-urbackup01-001/dump/vzdump-qemu-105-2018_02_22-16_00_02.vma.gz'
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:03 INFO: started backup task '459b5abe-aa47-47f0-9bc1-144ab9cabe54'
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:18:47 INFO: transferred 34359 MB in 1124 seconds (30 MB/s)
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:18:47 INFO: archive file size: 7.03GB
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:18:47 INFO: delete old backup '/vmfs/bkp-urbackup01-001/dump/vzdump-qemu-105-2018_02_15-16_00_02.vma.gz'
+#/var/log/vzdump/qemu-105.log 2018-02-22 16:18:47 INFO: Finished Backup of VM 105 (00:18:45)
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:04 INFO: Starting Backup of VM 106 (qemu)
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:04 INFO: status = running
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: update VM 106: -lock backup
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: VM Name: server02
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: include disk 'virtio0' 'ST2000DM-tpool-001:vm-106-disk-1' 32G
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: backup mode: snapshot
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: ionice priority: 7
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: creating archive '/vmfs/bkp-vol-001/dump/vzdump-qemu-106-2018_02_22-14_11_04.vma.gz'
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: started backup task '45a19f0d-dfcb-43d8-bcb2-9ce11cdecfb4'
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:30:31 INFO: transferred 34359 MB in 1166 seconds (29 MB/s)
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:30:31 INFO: archive file size: 7.53GB
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:30:31 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-qemu-106-2018_02_13-14_11_04.vma.gz'
+#/var/log/vzdump/qemu-106.log 2018-02-22 14:30:32 INFO: Finished Backup of VM 106 (00:19:28)
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:32 INFO: Starting Backup of VM 108 (qemu)
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:32 INFO: status = running
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:32 INFO: update VM 108: -lock backup
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:32 INFO: VM Name: monitoring01
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:32 INFO: include disk 'virtio0' 'ST2000DM-tpool-001:vm-108-disk-1' 32G
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:33 INFO: backup mode: snapshot
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:33 INFO: ionice priority: 7
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:33 INFO: creating archive '/vmfs/bkp-vol-001/dump/vzdump-qemu-108-2018_02_22-14_30_32.vma.gz'
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:34 INFO: started backup task '5d28af3d-8d8e-4bd8-ad38-3ec688f66f24'
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: transferred 34359 MB in 422 seconds (81 MB/s)
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: archive file size: 2.82GB
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-qemu-108-2018_02_13-14_29_14.vma.gz'
+#/var/log/vzdump/qemu-108.log 2018-02-22 14:37:37 INFO: Finished Backup of VM 108 (00:07:05)
+
