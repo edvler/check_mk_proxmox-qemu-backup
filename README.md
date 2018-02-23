@@ -51,9 +51,9 @@ QEMU-MACHINE;;;;;/etc/pve/qemu-server/104.conf;;;;;machine5
 ```
 
 ## Functions of the plugin
-![alt text](https://github.com/edvler/check_mk_proxmox-qemu-backup/docs/proxmox_qemu_backup_man-page.png)
+![](https://github.com/edvler/check_mk_proxmox-qemu-backup/blob/master/docs/proxmox_qemu_backup_man-page.png)
 
 ## Services screenshot
-![alt text](https://github.com/edvler/check_mk_proxmox-qemu-backup/docs/example-services-screenshot.png)
+![](https://github.com/edvler/check_mk_proxmox-qemu-backup/blob/master/docs/example-services-screenshot.png)
 
 
