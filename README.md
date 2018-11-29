@@ -6,6 +6,7 @@
 For a detailed description how to work with mkp's goto [https://mathias-kettner.de/cms_mkps.html](https://mathias-kettner.de/cms_mkps.html).
 
 ### Short tasks
+0. Login with your site user (user has the same name as the CMK-Site)
 1. copy the proxmox_qemu_check*.mkp (see [dist](dist) folder) to your Check_mk server into the /tmp folder.
 2. mkp install /tmp/proxmox_qemu_check*.mk
 3. Check if installation worked
