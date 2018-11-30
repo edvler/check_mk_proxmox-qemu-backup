@@ -11,7 +11,7 @@ For a detailed description how to work with mkp's goto [https://mathias-kettner.
 2. mkp install /tmp/proxmox_qemu_check*.mk
 3. Check if installation worked
 ```
-root@monitoring01:/opt/omd# find . -name '*proxmox_qemu_*'
+SITEUSER@monitoring01:/opt/omd# find . -name '*proxmox_qemu_*'
 ./sites/XXXX/local/share/check_mk/checks/proxmox_qemu_backup
 ./sites/XXXX/local/share/check_mk/checkman/proxmox_qemu_backup
 ./sites/XXXX/local/share/check_mk/web/plugins/wato/check_parameters_proxmox_qemu_backup.py
