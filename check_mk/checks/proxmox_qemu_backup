@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+
 # Author: Matthias Maderer
 # E-Mail: edvler@edvler-blog.de
 # URL: https://github.com/edvler/check_mk_proxmox-qemu-backup
@@ -23,7 +24,9 @@ def inventory_qemu_backup(info):
 def check_qemu_backup(item, params, info):
     #return 0 if check of backups should not be done
     if params['check_backup'] == 'ignore':
-        return 0, 'check disabled by rule'
+       # return 0, 'check disabled by rule'
+        yield 0, 'check disabled by rule'
+        return
 
     #get name of the logfile (the output of each logfile is
     #prefixed with its filename from the plugin)
@@ -51,10 +54,12 @@ def check_qemu_backup(item, params, info):
             #old or new dateformat in logfile?
             #old /var/log/vzdump/qemu-104.log Feb 07 12:10:54 INFO: creating archive '/vmfs/bkp-fs-stor-001/dump/vzdump-qemu-104-2018_02_07-12_10_54.vma.gz'
             #new /var/log/vzdump/qemu-105.log 2018-02-06 16:00:03 INFO: creating archive '/vmfs/bkp-urbackup01-001/dump/vzdump-qemu-105-2018_02_06-16_00_02.vma.gz'
+            d = ""
             try:
                 d = time.strptime(line[1]  + ' ' + line[2],"%Y-%m-%d %H:%M:%S")
                 offset=0
             except ValueError:
+                d = time.strptime(time.strftime("%Y",time.localtime()) + ' ' + line[1]  + ' ' + line[2] + ' ' + line[3],"%Y %b %d %H:%M:%S")
                 offset=1
 
             try:
@@ -67,6 +72,7 @@ def check_qemu_backup(item, params, info):
 
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Starting Backup of VM':
                     started = line
+                    started_datetime = d
 
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Finished Backup of VM':
                     finished = line
@@ -83,41 +89,92 @@ def check_qemu_backup(item, params, info):
 
     #if line_count is 0, no backup file exists --> error!
     if line_count == 0:
-        return 2, "no backup exists for this VM guest"
+        yield 2, "no backup exists for this VM guest"
+        return
 
     #check counter
     if error_count > 0:
-        return 2, 'errors found in logfile ' + logfile
+        yield 2, 'errors found in logfile ' + logfile
+        return
     if warn_count > 0:
-        return 1, 'warnings found in logfile ' + logfile
+        yield 1, 'warnings found in logfile ' + logfile
+        return
 
     #no warnings and erros!! check if lines indicating a successfull backup exists
     if archive != "nothing" and finished != "nothing" and started != "nothing" and file_created != "nothing":
         startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
-
-        old = time.time() - time.mktime(startdate)
-        duration_formatted = pretty_time_delta(old)
-        infotext = 'last backup from: ' + time.strftime("%Y-%m-%d %H:%M", startdate) + ' (' + duration_formatted + ' ago)'
-
         warn, error = params['backup_age']
 
-        if old >= error:
-            return 2, infotext
-        if old >= warn:
-            return 1, infotext
+	# Age of Backup
+        old = time.time() - time.mktime(startdate)
+        duration_formatted = pretty_time_delta(old)
+        infotext = 'last backup: ' + time.strftime("%Y-%m-%d %H:%M", startdate) + ' (Age: ' + duration_formatted + ' warn/crit at ' + pretty_time_delta(warn) + '/' + pretty_time_delta(error) + ')'
 
-        return 0, infotext
+
+        if old < warn:
+            yield 0, infotext
+        if old >= warn and old < error:
+            yield 1, infotext
+        if old >= error:
+            yield 2, infotext
+
+        # Example sizes
+        #qemu-100.log:Aug 21 05:01:31 INFO: archive file size: 594MB
+        #qemu-101.log:Jun 12 05:08:59 INFO: archive file size: 3.94GB
+        #qemu-102.log:Jun 12 05:09:00 INFO: archive file size: 0KB
+        #qemu-104.log:Jun 12 05:09:00 INFO: archive file size: 0KB
+        #qemu-105.log:Jun 12 05:10:58 INFO: archive file size: 832MB
+        #qemu-106.log:Jun 12 05:19:39 INFO: archive file size: 3.84GB
+
+        warn_size = 0
+        error_size = 0
+        if 'backup_minsize' in params:
+            warn_size, error_size = params['backup_minsize']
+
+        size = archive[offset+7]
+        size_unit = size[-2:]
+        size_numbers = float(size[:len(size)-2])
+        size_cal = -1
+
+        # Norm to Byte
+        # .../share/check_mk/web/plugins/metrics/check_mk.py
+        if size_unit == "GB":
+            size_cal = size_numbers*1024*1024*1024
+        if size_unit == "MB":
+            size_cal = size_numbers*1024*1024
+        if size_unit == "KB":
+            size_cal = size_numbers*1024
+
+        size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
+        if size_cal >= warn_size:
+            yield 0, size_infotext
+        if size_cal < warn_size and size_cal >= error_size:
+            yield 1, size_infotext
+        if size_cal < error_size:
+            yield 2, size_infotext
+
+        # metrics from .../share/check_mk/web/plugins/metrics/check_mk.py
+        perfdata = [
+            ( "backup_age", int(old), warn, error ),
+            ( "file_size", size_cal, warn_size, error_size ),
+        ]
+        yield None, None, perfdata
+
+        return
+
 
     #is backup currently running?
-    if archive == "nothing" and finished == "nothing" and started != "nothing" and file_created != "nothing":
-        startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
-        old = time.time() - time.mktime(startdate)
+    if archive == "nothing" and finished == "nothing" and started != "nothing":
+        old = time.time() - time.mktime(started_datetime)
         if old < params['running_time']:
-            return 0, 'backup is running since ' + time.strftime("%Y-%m-%d %H:%M", startdate)
+            yield 0, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
+            return
         else:
-            return 1, 'backup is running since ' + time.strftime("%Y-%m-%d %H:%M", startdate)
+            yield 1, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
+            return
 
-    return 3, "error occured in check plugin. Please post a issue on https://github.com/edvler/check_mk_proxmox-qemu-backup/issues inlcuding the output of the agent plugin /usr/lib/check_mk_agent/plugins/proxmox-qemu-backup"
+    yield 3, "error occured in check plugin. Please post a issue on https://github.com/edvler/check_mk_proxmox-qemu-backup/issues inlcuding the output of the agent plugin /usr/lib/check_mk_agent/plugins/proxmox-qemu-backup"
+    return
 
 # declare the check to Check_MK
 check_info["proxmox_qemu_backup"] = {
@@ -125,6 +182,7 @@ check_info["proxmox_qemu_backup"] = {
     'inventory_function':        inventory_qemu_backup,
     'service_description':       'Proxmox VM backup',
     'group':                     'proxmox',
+    'has_perfdata':              True,
 }
 
 def getDateFromFileCreated(vma_name):
@@ -141,13 +199,13 @@ def pretty_time_delta(seconds):
     hours, seconds = divmod(seconds, 3600)
     minutes, seconds = divmod(seconds, 60)
     if days > 0:
-        return '%s%d days %d hours %d minutes' % (sign_string, days, hours, minutes)
+        return '%s%dd %dh %dm' % (sign_string, days, hours, minutes)
     elif hours > 0:
-        return '%s%d hours %d minutes' % (sign_string, hours, minutes)
+        return '%s%dh %dm' % (sign_string, hours, minutes)
     elif minutes > 0:
-        return '%s%d minutes' % (sign_string, minutes)
+        return '%s%dm' % (sign_string, minutes)
     else:
-        return '0 minutes'
+        return '0m'
 
 #Example output of agent
 #
