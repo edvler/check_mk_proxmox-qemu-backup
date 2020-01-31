@@ -76,8 +76,11 @@ def check_qemu_backup(item, params, info):
                 d = time.strptime(line[1]  + ' ' + line[2],"%Y-%m-%d %H:%M:%S")
                 offset=0
             except ValueError:
-                d = time.strptime(time.strftime("%Y",time.localtime()) + ' ' + line[1]  + ' ' + line[2] + ' ' + line[3],"%Y %b %d %H:%M:%S")
-                offset=1
+                try:
+                    d = time.strptime(time.strftime("%Y",time.localtime()) + ' ' + line[1]  + ' ' + line[2] + ' ' + line[3],"%Y %b %d %H:%M:%S")
+                    offset=1
+                except ValueError:
+                    pass
 
             try:
                 #extract several infos
