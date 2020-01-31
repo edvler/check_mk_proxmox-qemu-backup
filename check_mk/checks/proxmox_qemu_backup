@@ -28,10 +28,18 @@ def check_qemu_backup(item, params, info):
         yield 0, 'check disabled by rule'
         return
 
+
+
     #get name of the logfile (the output of each logfile is
     #prefixed with its filename from the plugin)
     qemu_id=item.split(' ')[-1]
     logfile = '/var/log/vzdump/qemu-' + qemu_id + '.log'
+
+    ft=time.strftime("-%Y-%m-%d_%H%M%S")
+    #f=open(os.getenv("OMD_ROOT") + '/var/log/' + qemu_id + ft  + ".info_agent"  , 'w')
+    #for item in info:
+    #    f.write("%s\n" % item)
+    #f.close()
 
     #counter
     line_count=0
@@ -47,6 +55,11 @@ def check_qemu_backup(item, params, info):
 
     #check all lines
     for line in info:
+        #Check for running tasks
+        #task UPID:pve01:00000E8D:009D1950:5E344CAA:vzdump:101:root@pam:
+#        if line[0] == 'task'
+                
+
         #is this line of the given item (qemu_id)
         if line[0] == logfile:
             line_count += 1 #count lines of log for this id
@@ -110,14 +123,6 @@ def check_qemu_backup(item, params, info):
         duration_formatted = pretty_time_delta(old)
         infotext = 'last backup: ' + time.strftime("%Y-%m-%d %H:%M", startdate) + ' (Age: ' + duration_formatted + ' warn/crit at ' + pretty_time_delta(warn) + '/' + pretty_time_delta(error) + ')'
 
-
-        if old < warn:
-            yield 0, infotext
-        if old >= warn and old < error:
-            yield 1, infotext
-        if old >= error:
-            yield 2, infotext
-
         # Example sizes
         #qemu-100.log:Aug 21 05:01:31 INFO: archive file size: 594MB
         #qemu-101.log:Jun 12 05:08:59 INFO: archive file size: 3.94GB
@@ -125,7 +130,6 @@ def check_qemu_backup(item, params, info):
         #qemu-104.log:Jun 12 05:09:00 INFO: archive file size: 0KB
         #qemu-105.log:Jun 12 05:10:58 INFO: archive file size: 832MB
         #qemu-106.log:Jun 12 05:19:39 INFO: archive file size: 3.84GB
-
         warn_size = 0
         error_size = 0
         if 'backup_minsize' in params:
@@ -135,7 +139,7 @@ def check_qemu_backup(item, params, info):
         size_unit = size[-2:]
         size_numbers = float(size[:len(size)-2])
         size_cal = -1
-
+        
         # Norm to Byte
         # .../share/check_mk/web/plugins/metrics/check_mk.py
         if size_unit == "GB":
@@ -144,21 +148,29 @@ def check_qemu_backup(item, params, info):
             size_cal = size_numbers*1024*1024
         if size_unit == "KB":
             size_cal = size_numbers*1024
-
-        size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
-        if size_cal >= warn_size:
-            yield 0, size_infotext
-        if size_cal < warn_size and size_cal >= error_size:
-            yield 1, size_infotext
-        if size_cal < error_size:
-            yield 2, size_infotext
-
+        
         # metrics from .../share/check_mk/web/plugins/metrics/check_mk.py
         perfdata = [
             ( "backup_age", int(old), warn, error ),
-            ( "file_size", size_cal, warn_size, error_size ),
+            ( "file_size", int(size_cal), warn_size, error_size ),
         ]
-        yield None, None, perfdata
+
+        if old < warn:
+            yield 0, infotext, perfdata
+        if old >= warn and old < error:
+            yield 1, infotext, perfdata
+        if old >= error:
+            yield 2, infotext, perfdata
+
+        
+
+        size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
+        if size_cal >= warn_size:
+            yield 0, size_infotext, perfdata
+        if size_cal < warn_size and size_cal >= error_size:
+            yield 1, size_infotext, perfdata
+        if size_cal < error_size:
+            yield 2, size_infotext, perfdata
 
         return
 
