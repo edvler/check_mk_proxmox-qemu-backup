@@ -51,14 +51,18 @@ def check_qemu_backup(item, params, info):
     started="nothing"
     file_created="nothing"
 
+    vzdump_is_running = 0
+
     offset=0
 
     #check all lines
     for line in info:
         #Check for running tasks
         #task UPID:pve01:00000E8D:009D1950:5E344CAA:vzdump:101:root@pam:
-#        if line[0] == 'task'
-                
+        if line[0] == 'task':
+            taskinfos = line[1].split(":")
+            if taskinfos[6] == qemu_id:
+                vzdump_is_running = 1    
 
         #is this line of the given item (qemu_id)
         if line[0] == logfile:
@@ -176,7 +180,7 @@ def check_qemu_backup(item, params, info):
 
 
     #is backup currently running?
-    if archive == "nothing" and finished == "nothing" and started != "nothing":
+    if vzdump_is_running == 1:
         old = time.time() - time.mktime(started_datetime)
         if old < params['running_time']:
             yield 0, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
@@ -231,6 +235,7 @@ def pretty_time_delta(seconds):
 #QEMU-MACHINE;;;;;/etc/pve/qemu-server/106.conf;;;;;server02
 #QEMU-MACHINE;;;;;/etc/pve/qemu-server/105.conf;;;;;urbackup01
 #QEMU-MACHINE;;;;;/etc/pve/qemu-server/104.conf;;;;;zbox
+#task UPID:pve01:000031A4:009F1CF0:5E3451D2:vzdump:108:root@pam:
 #/var/log/vzdump/qemu-100.log 2017-09-05 11:45:02 INFO: Starting Backup of VM 100 (qemu)
 #/var/log/vzdump/qemu-100.log 2017-09-05 11:45:02 INFO: status = stopped
 #/var/log/vzdump/qemu-100.log 2017-09-05 11:45:02 INFO: update VM 100: -lock backup

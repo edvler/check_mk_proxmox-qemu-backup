@@ -20,6 +20,9 @@ for qemu in $QEMU_MACHINES; do
     echo "QEMU-MACHINE;;;;;$qemu;;;;;$QEMU_MACHINE_NAME"
 done
 
+#Running processes
+ps -ax -o command |grep vzdump | grep UPID
+
 #Content of all vzdump logfiles, with filename prefixed
 awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* |grep -v sparse
 
