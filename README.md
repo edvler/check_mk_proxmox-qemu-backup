@@ -19,7 +19,7 @@ SITEUSER@monitoring01:/opt/omd# find . -name '*proxmox_qemu_*'
 ```
 4. Goto your Check_mk webinterface. Choose WATO -> Host & Service Parameters. Search for proxmox.
 
-## On the UrBackup Server (NOT THE CHECK_MK SERVER!):
+## On the Proxmox Server (NOT THE CHECK_MK SERVER!):
 1. Copy the plugin script [check_mk/agents/plugins/proxmox_qemu_backup](check_mk/agents/plugins/proxmox_qemu_backup) into /usr/lib/check_mk_agent/plugins/
 2. chmod 755 /usr/lib/check_mk_agent/plugins/proxmox_qemu_backup
 3. Execute the script: /usr/lib/check_mk_agent/plugins/proxmox_qemu_backup. If everythings works the output should look like this
