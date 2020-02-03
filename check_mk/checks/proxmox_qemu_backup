@@ -35,11 +35,11 @@ def check_qemu_backup(item, params, info):
     qemu_id=item.split(' ')[-1]
     logfile = '/var/log/vzdump/qemu-' + qemu_id + '.log'
 
-    ft=time.strftime("-%Y-%m-%d_%H%M%S")
-    #f=open(os.getenv("OMD_ROOT") + '/var/log/' + qemu_id + ft  + ".info_agent"  , 'w')
-    #for item in info:
-    #    f.write("%s\n" % item)
-    #f.close()
+#    ft=time.strftime("-%Y-%m-%d_%H%M%S")
+#    f=open(os.getenv("OMD_ROOT") + '/tmp/' + qemu_id + ft  + ".info_agent"  , 'w')
+#    for item in info:
+#        f.write("%s\n" % item)
+#    f.close()
 
     #counter
     line_count=0
@@ -59,10 +59,13 @@ def check_qemu_backup(item, params, info):
     for line in info:
         #Check for running tasks
         #task UPID:pve01:00000E8D:009D1950:5E344CAA:vzdump:101:root@pam:
-        if line[0] == 'task':
-            taskinfos = line[1].split(":")
-            if taskinfos[6] == qemu_id:
-                vzdump_is_running = 1    
+        if line[0] == 'PSOUTPUT':
+            #taskinfos = line[1].split(":")
+            #if taskinfos[6] == qemu_id:
+            #    vzdump_is_running = 1
+            for x in line:
+            	if x == qemu_id:
+                    vzdump_is_running = 1
 
         #is this line of the given item (qemu_id)
         if line[0] == logfile:

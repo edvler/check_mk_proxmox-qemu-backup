@@ -21,7 +21,8 @@ for qemu in $QEMU_MACHINES; do
 done
 
 #Running processes
-ps -ax -o command |grep vzdump | grep UPID
+psout=$(ps aux |grep vzdump |grep /bin/sh)
+echo "PSOUTPUT $psout"
 
 #Content of all vzdump logfiles, with filename prefixed
 awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* |grep -v sparse
