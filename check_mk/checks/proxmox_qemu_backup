@@ -64,7 +64,7 @@ def check_qemu_backup(item, params, info):
             #if taskinfos[6] == qemu_id:
             #    vzdump_is_running = 1
             for x in line:
-            	if x == qemu_id:
+                if x == qemu_id:
                     vzdump_is_running = 1
 
         #is this line of the given item (qemu_id)
@@ -87,7 +87,7 @@ def check_qemu_backup(item, params, info):
 
             try:
                 #extract several infos
-                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] == 'INFO: creating archive':
+                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: creating vzdump archive':
                     file_created = line
 
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: archive file size:':
@@ -125,10 +125,10 @@ def check_qemu_backup(item, params, info):
 
     #no warnings and erros!! check if lines indicating a successfull backup exists
     if archive != "nothing" and finished != "nothing" and started != "nothing" and file_created != "nothing":
-        startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
+        startdate = getDateFromFileCreated(file_created[offset+7].split("/")[-1])
         warn, error = params['backup_age']
 
-	# Age of Backup
+        # Age of Backup
         old = time.time() - time.mktime(startdate)
         duration_formatted = pretty_time_delta(old)
         infotext = 'last backup: ' + time.strftime("%Y-%m-%d %H:%M", startdate) + ' (Age: ' + duration_formatted + ' warn/crit at ' + pretty_time_delta(warn) + '/' + pretty_time_delta(error) + ')'
@@ -149,7 +149,7 @@ def check_qemu_backup(item, params, info):
         size_unit = size[-2:]
         size_numbers = float(size[:len(size)-2])
         size_cal = -1
-        
+
         # Norm to Byte
         # .../share/check_mk/web/plugins/metrics/check_mk.py
         if size_unit == "GB":
@@ -158,7 +158,7 @@ def check_qemu_backup(item, params, info):
             size_cal = size_numbers*1024*1024
         if size_unit == "KB":
             size_cal = size_numbers*1024
-        
+
         # metrics from .../share/check_mk/web/plugins/metrics/check_mk.py
         perfdata = [
             ( "backup_age", int(old), warn, error ),
@@ -172,7 +172,7 @@ def check_qemu_backup(item, params, info):
         if old >= error:
             yield 2, infotext, perfdata
 
-        
+
 
         size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
         if size_cal >= warn_size:
