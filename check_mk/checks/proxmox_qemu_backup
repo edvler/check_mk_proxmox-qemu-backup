@@ -208,7 +208,10 @@ check_info["proxmox_qemu_backup"] = {
 }
 
 def getDateFromFileCreated(vma_name):
-    p = re.compile("(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
+    if "differential" in vma_name:
+        p = re.compile("differential-(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
+    else:
+        p = re.compile("(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
     m = p.search(vma_name)
     d = time.strptime(m.group(1),"%Y_%m_%d-%H_%M_%S")
     return d
