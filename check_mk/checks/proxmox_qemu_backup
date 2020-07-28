@@ -88,11 +88,11 @@ def check_qemu_backup(item, params, info):
             try:
                 #extract several infos
                 #proxmox 6.2-9 introduced a new log-format
-		if line[offset+5] == 'vzdump':
+                if line[offset+5] == 'vzdump':
                     if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: creating vzdump archive':
                         file_created = line
                         startdate = getDateFromFileCreated(file_created[offset+7].split("/")[-1])
-		else:
+                else:
                     if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] == 'INFO: creating archive':
                         file_created = line
                         startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
