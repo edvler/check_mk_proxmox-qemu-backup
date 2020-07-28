@@ -87,8 +87,15 @@ def check_qemu_backup(item, params, info):
 
             try:
                 #extract several infos
-                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] == 'INFO: creating archive':
-                    file_created = line
+                #proxmox 6.2-9 introduced a new log-format
+		if line[offset+5] == 'vzdump':
+                    if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: creating vzdump archive':
+                        file_created = line
+                        startdate = getDateFromFileCreated(file_created[offset+7].split("/")[-1])
+		else:
+                    if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] == 'INFO: creating archive':
+                        file_created = line
+                        startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
 
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: archive file size:':
                     archive = line
@@ -125,7 +132,8 @@ def check_qemu_backup(item, params, info):
 
     #no warnings and erros!! check if lines indicating a successfull backup exists
     if archive != "nothing" and finished != "nothing" and started != "nothing" and file_created != "nothing":
-        startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
+
+
         warn, error = params['backup_age']
 
 	# Age of Backup
@@ -208,10 +216,17 @@ check_info["proxmox_qemu_backup"] = {
 }
 
 def getDateFromFileCreated(vma_name):
-    p = re.compile("(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
+    if "differential" in vma_name:
+        p = re.compile("differential-(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
+    else:
+        p = re.compile("(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
     m = p.search(vma_name)
     d = time.strptime(m.group(1),"%Y_%m_%d-%H_%M_%S")
     return d
+#    p = re.compile("(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
+#    m = p.search(vma_name)
+#    d = time.strptime(m.group(1),"%Y_%m_%d-%H_%M_%S")
+#    return d
 
 #thanks to https://gist.github.com/thatalextaylor/7408395
 def pretty_time_delta(seconds):
