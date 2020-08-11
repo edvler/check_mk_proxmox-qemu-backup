@@ -210,7 +210,7 @@ def check_qemu_backup(item, params, info):
 check_info["proxmox_qemu_backup"] = {
     'check_function':            check_qemu_backup,
     'inventory_function':        inventory_qemu_backup,
-    'service_description':       'Proxmox VM backup',
+    'service_description':       'Proxmox QEMU VM backup',
     'group':                     'proxmox',
     'has_perfdata':              True,
 }
@@ -373,4 +373,5 @@ def pretty_time_delta(seconds):
 #/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: archive file size: 2.82GB
 #/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-qemu-108-2018_02_13-14_29_14.vma.gz'
 #/var/log/vzdump/qemu-108.log 2018-02-22 14:37:37 INFO: Finished Backup of VM 108 (00:07:05)
+
 
