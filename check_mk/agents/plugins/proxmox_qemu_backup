@@ -6,6 +6,7 @@
 # License: GPLv2
 
 QEMU_SERVER_DIR=/etc/pve/qemu-server/
+LXC_SERVER_DIR=/etc/pve/lxc/
 VZDUMP_LOG_DIR=/var/log/vzdump/
 
 echo '<<<proxmox_qemu_backup>>>'
@@ -19,11 +20,22 @@ for qemu in $QEMU_MACHINES; do
     fi
     echo "QEMU-MACHINE;;;;;$qemu;;;;;$QEMU_MACHINE_NAME"
 done
-
-#Running processes
-psout=$(ps aux |grep vzdump |grep /bin/sh)
-echo "PSOUTPUT $psout"
-
 #Content of all vzdump logfiles, with filename prefixed
 awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* |grep -v sparse
 
+###now lxc
+
+echo '<<<proxmox_lxc_backup>>>'
+# LXC
+LXC_MACHINES=$(find $LXC_SERVER_DIR -type f)
+for lxc in $LXC_MACHINES; do
+    LXC_MACHINE_NAME=$(cat $lxc|grep name:|awk '{print $2}')
+    if [ -z "$LXC_MACHINE_NAME" ]; then
+        LXC_MACHINE_NAME="NO-NAME"
+    fi
+    echo "LXC-MACHINE;;;;;$lxc;;;;;$LXC_MACHINE_NAME"
+done
+
+
+#Content of all vzdump logfiles, with filename prefixed
+awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* |grep -v sparse
