@@ -231,7 +231,7 @@ def check_qemu_backup(item, params, info):
 check_info["proxmox_qemu_backup"] = {
     'check_function':            check_qemu_backup,
     'inventory_function':        inventory_qemu_backup,
-    'service_description':       'Proxmox VM backup',
+    'service_description':       'Proxmox QEMU VM backup',
     'group':                     'proxmox',
     'has_perfdata':              True,
 }
