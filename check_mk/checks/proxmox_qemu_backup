@@ -121,10 +121,10 @@ def check_qemu_backup(item, params, info):
             for content in line:
                 if 'warn' in content.lower():
                     warn_count += 1
-                    warn_msg = " ".join(line[offset+3:]) + "; "
+                    warn_msg += " ".join(line[offset+3:]) + "; "
                 elif 'error' in content.lower() or 'fail' in content.lower():
                     error_count += 1
-                    error_msg = " ".join(line[offset+3:]) + "; "
+                    error_msg += " ".join(line[offset+3:]) + "; "
 
     #if line_count is 0, no backup file exists --> error!
     if line_count == 0:
@@ -161,10 +161,10 @@ def check_qemu_backup(item, params, info):
         error_size = 0
         if 'backup_minsize' in params:
             warn_size, error_size = params['backup_minsize']
-        if archive[4] == "archive":
+        if archive[offset+4] == "archive":
             size = archive[offset+7]
             size_unit = size[-2:]
-        if archive[4] == "transferred":
+        if archive[offset+4] == "transferred":
             size = archive[offset+5]
             size_unit = archive[offset+6]
         size_numbers = float(size[:len(size)-2])
@@ -200,9 +200,9 @@ def check_qemu_backup(item, params, info):
 
         
 
-        if archive[4] == "archive":
+        if archive[offset+4] == "archive":
             size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
-        if archive[4] == "transferred":
+        if archive[offset+4] == "transferred":
             size_infotext = "transferred size: " + str(size_numbers) + ' ' + size_unit
         if size_cal >= warn_size:
             yield 0, size_infotext, perfdata
