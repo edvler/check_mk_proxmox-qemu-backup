@@ -96,9 +96,7 @@ def check_qemu_backup(item, params, info):
                         startdate = getDateFromFileCreated(file_created[offset+7].split("/")[-1])
                 #Proxmox Backup Server
                 if line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'Proxmox Backup Server':
-                    print line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] + ' ' + line[offset+8]
                     if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] + ' ' + line[offset+8] == 'INFO: creating Proxmox Backup Server archive':
-                        print "Proxmox Backup Server"
                         file_created = line
                         startdate = getDateFromFileCreated(file_created[offset+9].split("/")[-1])
                 else:
@@ -123,10 +121,10 @@ def check_qemu_backup(item, params, info):
             for content in line:
                 if 'warn' in content.lower():
                     warn_count += 1
-                    warn_msg = " ".join(line[1:]) + "\n"
+                    warn_msg = " ".join(line[offset+3:]) + "; "
                 elif 'error' in content.lower() or 'fail' in content.lower():
                     error_count += 1
-                    error_msg = " ".join(line[1:]) + "\n"
+                    error_msg = " ".join(line[offset+3:]) + "; "
 
     #if line_count is 0, no backup file exists --> error!
     if line_count == 0:
@@ -135,10 +133,10 @@ def check_qemu_backup(item, params, info):
 
     #check counter
     if error_count > 0:
-        yield 2, 'errors found in logfile ' + logfile + "\n" + error_msg
+        yield 2, error_msg
         return
     if warn_count > 0:
-        yield 1, 'warnings found in logfile ' + logfile + "\n" + warn_msg
+        yield 1, warn_msg
         return
 
     #no warnings and erros!! check if lines indicating a successfull backup exists
@@ -169,7 +167,6 @@ def check_qemu_backup(item, params, info):
         if archive[4] == "transferred":
             size = archive[offset+5]
             size_unit = archive[offset+6]
-        print size + " " + size_unit
         size_numbers = float(size[:len(size)-2])
         size_cal = -1
         
@@ -402,4 +399,3 @@ def pretty_time_delta(seconds):
 #/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: archive file size: 2.82GB
 #/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-qemu-108-2018_02_13-14_29_14.vma.gz'
 #/var/log/vzdump/qemu-108.log 2018-02-22 14:37:37 INFO: Finished Backup of VM 108 (00:07:05)
-
