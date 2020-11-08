@@ -213,6 +213,8 @@ def check_qemu_backup(item, params, info):
 
         return
 
+    elif started != "nothing":
+        vzdump_is_running = 1
 
     #is backup currently running?
     if vzdump_is_running == 1:
