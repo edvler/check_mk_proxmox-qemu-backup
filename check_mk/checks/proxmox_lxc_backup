@@ -214,7 +214,8 @@ def check_lxc_backup(item, params, info):
             yield 2, size_infotext, perfdata
 
         return
-
+    elif started != "nothing":
+        vzdump_is_running = 1
 
     #is backup currently running?
     if vzdump_is_running == 1:
