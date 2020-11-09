@@ -180,6 +180,8 @@ def check_qemu_backup(item, params, info):
             size_cal = size_numbers*1024*1024
         if size_unit == "KB":
             size_cal = size_numbers*1024
+        if size_unit == "TiB":
+            size_cal = size_numbers*1000*1000*1000*1000
         if size_unit == "GiB":
             size_cal = size_numbers*1000*1000*1000
         if size_unit == "MiB":
