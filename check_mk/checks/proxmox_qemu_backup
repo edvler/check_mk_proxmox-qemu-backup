@@ -44,7 +44,9 @@ def check_qemu_backup(item, params, info):
     #counter
     line_count=0
     warn_count=0
+    warn_msg=""
     error_count=0
+    error_msg=""
 
     archive="nothing"
     finished="nothing"
@@ -92,18 +94,23 @@ def check_qemu_backup(item, params, info):
                     if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: creating vzdump archive':
                         file_created = line
                         startdate = getDateFromFileCreated(file_created[offset+7].split("/")[-1])
+                #Proxmox Backup Server
+                if line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'Proxmox Backup Server':
+                    if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] + ' ' + line[offset+8] == 'INFO: creating Proxmox Backup Server archive':
+                        file_created = line
+                        startdate = getDateFromFileCreated(file_created[offset+9].split("/")[-1])
                 else:
                     if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] == 'INFO: creating archive':
                         file_created = line
                         startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
-
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: archive file size:':
                     archive = line
-
+                #we have no archive here, only reused and transfered
+                if line[offset+3] + ' ' + line[offset+4] == 'INFO: transferred':
+                    archive = line
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Starting Backup of VM':
                     started = line
                     started_datetime = d
-
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Finished Backup of VM':
                     finished = line
 
@@ -114,8 +121,10 @@ def check_qemu_backup(item, params, info):
             for content in line:
                 if 'warn' in content.lower():
                     warn_count += 1
+                    warn_msg += " ".join(line[offset+3:]) + "; "
                 elif 'error' in content.lower() or 'fail' in content.lower():
                     error_count += 1
+                    error_msg += " ".join(line[offset+3:]) + "; "
 
     #if line_count is 0, no backup file exists --> error!
     if line_count == 0:
@@ -124,10 +133,10 @@ def check_qemu_backup(item, params, info):
 
     #check counter
     if error_count > 0:
-        yield 2, 'errors found in logfile ' + logfile
+        yield 2, error_msg
         return
     if warn_count > 0:
-        yield 1, 'warnings found in logfile ' + logfile
+        yield 1, warn_msg
         return
 
     #no warnings and erros!! check if lines indicating a successfull backup exists
@@ -152,9 +161,12 @@ def check_qemu_backup(item, params, info):
         error_size = 0
         if 'backup_minsize' in params:
             warn_size, error_size = params['backup_minsize']
-
-        size = archive[offset+7]
-        size_unit = size[-2:]
+        if archive[offset+4] == "archive":
+            size = archive[offset+7]
+            size_unit = size[-2:]
+        if archive[offset+4] == "transferred":
+            size = archive[offset+5]
+            size_unit = archive[offset+6]
         size_numbers = float(size[:len(size)-2])
         size_cal = -1
         
@@ -166,6 +178,12 @@ def check_qemu_backup(item, params, info):
             size_cal = size_numbers*1024*1024
         if size_unit == "KB":
             size_cal = size_numbers*1024
+        if size_unit == "GiB":
+            size_cal = size_numbers*1000*1000*1000
+        if size_unit == "MiB":
+            size_cal = size_numbers*1000*1000
+        if size_unit == "KiB":
+            size_cal = size_numbers*1000
         
         # metrics from .../share/check_mk/web/plugins/metrics/check_mk.py
         perfdata = [
@@ -182,7 +200,10 @@ def check_qemu_backup(item, params, info):
 
         
 
-        size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
+        if archive[offset+4] == "archive":
+            size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
+        if archive[offset+4] == "transferred":
+            size_infotext = "transferred size: " + str(size_numbers) + ' ' + size_unit
         if size_cal >= warn_size:
             yield 0, size_infotext, perfdata
         if size_cal < warn_size and size_cal >= error_size:
@@ -192,6 +213,8 @@ def check_qemu_backup(item, params, info):
 
         return
 
+    elif started != "nothing":
+        vzdump_is_running = 1
 
     #is backup currently running?
     if vzdump_is_running == 1:
@@ -210,18 +233,23 @@ def check_qemu_backup(item, params, info):
 check_info["proxmox_qemu_backup"] = {
     'check_function':            check_qemu_backup,
     'inventory_function':        inventory_qemu_backup,
-    'service_description':       'Proxmox VM backup',
+    'service_description':       'Proxmox QEMU VM backup',
     'group':                     'proxmox',
     'has_perfdata':              True,
 }
 
 def getDateFromFileCreated(vma_name):
-    if "differential" in vma_name:
-        p = re.compile("differential-(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
+    if "T" in vma_name:
+        p = re.compile("([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})")
+        m = p.search(vma_name)
+        d = time.strptime(m.group(1),"%Y-%m-%dT%H:%M:%S")
     else:
-        p = re.compile("(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
-    m = p.search(vma_name)
-    d = time.strptime(m.group(1),"%Y_%m_%d-%H_%M_%S")
+        if "differential" in vma_name:
+            p = re.compile("differential-(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
+        else:
+            p = re.compile("(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
+        m = p.search(vma_name)
+        d = time.strptime(m.group(1),"%Y_%m_%d-%H_%M_%S")
     return d
 #    p = re.compile("(20[0-9][0-9]_[0-9][0-9]_[0-9][0-9]-[0-9][0-9]_[0-9][0-9]_[0-9][0-9])")
 #    m = p.search(vma_name)
@@ -373,4 +401,3 @@ def pretty_time_delta(seconds):
 #/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: archive file size: 2.82GB
 #/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-qemu-108-2018_02_13-14_29_14.vma.gz'
 #/var/log/vzdump/qemu-108.log 2018-02-22 14:37:37 INFO: Finished Backup of VM 108 (00:07:05)
-
