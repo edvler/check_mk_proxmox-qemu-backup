@@ -88,21 +88,35 @@ def check_qemu_backup(item, params, info):
                     pass
 
             try:
-                #extract several infos
-                #proxmox 6.2-9 introduced a new log-format
-                if line[offset+5] == 'vzdump':
-                    if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: creating vzdump archive':
+                if line[offset+3] + ' ' + line[offset+4] == 'INFO: creating':
+                    #proxmox 6.2-9 introduced a new log-format
+                    if line[offset+5] == 'vzdump':
                         file_created = line
                         startdate = getDateFromFileCreated(file_created[offset+7].split("/")[-1])
-                #Proxmox Backup Server
-                if line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'Proxmox Backup Server':
-                    if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] + ' ' + line[offset+8] == 'INFO: creating Proxmox Backup Server archive':
-                        file_created = line
-                        startdate = getDateFromFileCreated(file_created[offset+9].split("/")[-1])
-                else:
-                    if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] == 'INFO: creating archive':
+                    #< proxmox 6.2
+                    if line[offset+5] == 'archive':
                         file_created = line
                         startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
+                    #< proxmox 6
+                    if line[offset+5] == 'Proxmox':
+                        file_created = line
+                        startdate = getDateFromFileCreated(file_created[offset+9].split("/")[-1])
+
+                #extract several infos
+                #proxmox 6.2-9 introduced a new log-format
+#               if line[offset+5] == 'vzdump':
+#                    if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: creating vzdump archive':
+#                        file_created = line
+#                        startdate = getDateFromFileCreated(file_created[offset+7].split("/")[-1])
+#                #Proxmox Backup Server
+#                if line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'Proxmox Backup Server':
+#                    if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] + ' ' + line[offset+8] == 'INFO: creating Proxmox Backup Server archive':
+#                        file_created = line
+#                        startdate = getDateFromFileCreated(file_created[offset+9].split("/")[-1])
+#                else:
+#                    if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] == 'INFO: creating archive':
+#                        file_created = line
+#                        startdate = getDateFromFileCreated(file_created[offset+6].split("/")[-1])
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] == 'INFO: archive file size:':
                     archive = line
                 #we have no archive here, only reused and transfered

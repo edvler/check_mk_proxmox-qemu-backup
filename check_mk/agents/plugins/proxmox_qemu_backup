@@ -22,7 +22,7 @@ for qemu in $QEMU_MACHINES; do
 done
 
 #Content of all vzdump logfiles, with filename prefixed
-awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* |grep -v sparse
+awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* | grep -v "INFO: status:"
 
 ###now lxc
 
@@ -39,9 +39,10 @@ done
 
 
 #Content of all vzdump logfiles, with filename prefixed
-awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* |grep -v sparse
+awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* | grep -v "INFO: status:"
 
 
 #Running processes
 psout=$(ps aux |grep vzdump |grep /bin/sh)
 echo "PSOUTPUT $psout"
+
