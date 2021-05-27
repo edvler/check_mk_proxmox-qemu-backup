@@ -238,7 +238,7 @@ def check_lxc_backup(item, params, info):
 check_info["proxmox_lxc_backup"] = {
     'check_function':            check_lxc_backup,
     'inventory_function':        inventory_lxc_backup,
-    'service_description':       'Proxmox LXC VM backup',
+    'service_description':       'Proxmox LXC VM backup %s',
     'group':                     'proxmox',
     'has_perfdata':              True,
 }
