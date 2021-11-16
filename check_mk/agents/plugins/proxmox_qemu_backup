@@ -5,24 +5,24 @@
 # URL: https://github.com/edvler/check_mk_proxmox-qemu-backup
 # License: GPLv2
 
-QEMU_SERVER_DIR=/etc/pve/qemu-server/
-LXC_SERVER_DIR=/etc/pve/lxc/
-VZDUMP_LOG_DIR=/var/log/vzdump/
+QEMU_SERVER_DIR=/etc/pve/qemu-server
+LXC_SERVER_DIR=/etc/pve/lxc
+VZDUMP_LOG_DIR=/var/log/vzdump
 
 echo '<<<proxmox_qemu_backup>>>'
 
 #get all proxmox qemu machines
 QEMU_MACHINES=$(find $QEMU_SERVER_DIR -type f)
 for qemu in $QEMU_MACHINES; do
+    QEMU_VMID=$(basename $qemu | cut -d '.' -f 1)
     QEMU_MACHINE_NAME=$(cat $qemu|grep name:|awk '{print $2}')
     if [ -z "$QEMU_MACHINE_NAME" ]; then
         QEMU_MACHINE_NAME="NO-NAME"
     fi
     echo "QEMU-MACHINE;;;;;$qemu;;;;;$QEMU_MACHINE_NAME"
+    awk '{print FILENAME, $0}' ${VZDUMP_LOG_DIR}/qemu-${QEMU_VMID}.log \
+      | grep -v "INFO: status:"
 done
-
-#Content of all vzdump logfiles, with filename prefixed
-awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* | grep -v "INFO: status:"
 
 ###now lxc
 
@@ -30,17 +30,15 @@ echo '<<<proxmox_lxc_backup>>>'
 # LXC
 LXC_MACHINES=$(find $LXC_SERVER_DIR -type f)
 for lxc in $LXC_MACHINES; do
+    LXC_VMID=$(basename $lxc | cut -d '.' -f 1)
     LXC_MACHINE_NAME=$(cat $lxc|grep name:|awk '{print $2}')
     if [ -z "$LXC_MACHINE_NAME" ]; then
         LXC_MACHINE_NAME="NO-NAME"
     fi
     echo "LXC-MACHINE;;;;;$lxc;;;;;$LXC_MACHINE_NAME"
+    awk '{print FILENAME, $0}' ${VZDUMP_LOG_DIR}/lxc-${LXC_VMID}.log \
+      | grep -v "INFO: status:"
 done
-
-
-#Content of all vzdump logfiles, with filename prefixed
-awk '{print FILENAME, $0}' $VZDUMP_LOG_DIR* | grep -v "INFO: status:"
-
 
 #Running processes
 psout=$(ps aux |grep vzdump |grep /bin/sh)
