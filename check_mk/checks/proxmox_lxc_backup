@@ -52,6 +52,7 @@ def check_lxc_backup(item, params, info):
     finished="nothing"
     started="nothing"
     file_created="nothing"
+    incremental=False
 
     vzdump_is_running = 0
 
@@ -110,6 +111,11 @@ def check_lxc_backup(item, params, info):
                 #root.pxar:', u'had', u'to', u'upload', u'585.86', u'MiB', u'of', u'5.95', u'GiB', u'in', u'60.17s,', u'average', u'speed', u'9.74', u'MiB/s).']
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: root.pxar: had to upload':
                     archive = line
+                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: root.pxar: had to backup':
+                    archive = line
+                if 'incrementally,' in line:
+                    incremental = True
+                    size, size_unit = '0', 'B'
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Starting Backup of VM':
                     started = line
                     started_datetime = d
@@ -142,8 +148,7 @@ def check_lxc_backup(item, params, info):
         yield 1, warn_msg
         return
     #no warnings and erros!! check if lines indicating a successfull backup exists
-    if archive != "nothing" and finished != "nothing" and started != "nothing" and file_created != "nothing":
-
+    if (archive != "nothing" or incremental) and finished != "nothing" and started != "nothing" and file_created != "nothing":
 
         warn, error = params['backup_age']
 
@@ -169,7 +174,10 @@ def check_lxc_backup(item, params, info):
         if archive[offset+3] + ' ' + archive[offset+4] + ' ' + archive[offset+5] + ' ' + archive[offset+6] + ' ' + archive[offset+7] == 'INFO: root.pxar: had to upload':
             size = archive[offset+8]
             size_unit = archive[offset+9]
-        size_numbers = float(size[:len(size)-2])
+        if archive[offset+3] + ' ' + archive[offset+4] + ' ' + archive[offset+5] + ' ' + archive[offset+6] + ' ' + archive[offset+7] == 'INFO: root.pxar: had to backup':
+            size = archive[offset+8]
+            size_unit = archive[offset+9]
+        size_numbers = float(size.strip())
         size_cal = -1
         
         # Norm to Byte
@@ -190,7 +198,6 @@ def check_lxc_backup(item, params, info):
             size_cal = size_numbers*1000*1000
         if size_unit == "KiB":
             size_cal = size_numbers*1000
-        
         # metrics from .../share/check_mk/web/plugins/metrics/check_mk.py
         perfdata = [
             ( "backup_age", int(old), warn, error ),
@@ -204,17 +211,20 @@ def check_lxc_backup(item, params, info):
         if old >= error:
             yield 2, infotext, perfdata
 
-        
-
         if archive[offset+4] == "archive":
             size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
-        if archive[offset+3] + ' ' + archive[offset+4] + ' ' + archive[offset+5] + ' ' + archive[offset+6] + ' ' + archive[offset+7] == 'INFO: root.pxar: had to upload':
+        elif archive[offset+3] + ' ' + archive[offset+4] + ' ' + archive[offset+5] + ' ' + archive[offset+6] + ' ' + archive[offset+7] == 'INFO: root.pxar: had to upload':
             size_infotext = "upload size: " + str(size_numbers) + ' ' + size_unit
-        if size_cal >= warn_size:
+        elif archive[offset+3] + ' ' + archive[offset+4] + ' ' + archive[offset+5] + ' ' + archive[offset+6] + ' ' + archive[offset+7] == 'INFO: root.pxar: had to backup':
+            size_infotext = "upload size: " + str(size_numbers) + ' ' + size_unit
+        else:
+            size_infotext = "empty incremental backup"
+
+        if size_cal >= warn_size or incremental:
             yield 0, size_infotext, perfdata
-        if size_cal < warn_size and size_cal >= error_size:
+        elif size_cal < warn_size and size_cal >= error_size:
             yield 1, size_infotext, perfdata
-        if size_cal < error_size:
+        elif size_cal < error_size:
             yield 2, size_infotext, perfdata
 
         return
