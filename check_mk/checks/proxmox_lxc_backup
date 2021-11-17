@@ -66,7 +66,7 @@ def check_lxc_backup(item, params, info):
             #if taskinfos[6] == lxc_id:
             #    vzdump_is_running = 1
             for x in line:
-            	if x == lxc_id:
+                if x == lxc_id:
                     vzdump_is_running = 1
 
         #is this line of the given item (lxc_id)
@@ -109,6 +109,8 @@ def check_lxc_backup(item, params, info):
                 #we have no archive here, only reused and transfered
                 #root.pxar:', u'had', u'to', u'upload', u'585.86', u'MiB', u'of', u'5.95', u'GiB', u'in', u'60.17s,', u'average', u'speed', u'9.74', u'MiB/s).']
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: root.pxar: had to upload':
+                    archive = line
+                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: root.pxar: had to backup':
                     archive = line
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Starting Backup of VM':
                     started = line
@@ -169,9 +171,12 @@ def check_lxc_backup(item, params, info):
         if archive[offset+3] + ' ' + archive[offset+4] + ' ' + archive[offset+5] + ' ' + archive[offset+6] + ' ' + archive[offset+7] == 'INFO: root.pxar: had to upload':
             size = archive[offset+8]
             size_unit = archive[offset+9]
+        if archive[offset+3] + ' ' + archive[offset+4] + ' ' + archive[offset+5] + ' ' + archive[offset+6] + ' ' + archive[offset+7] == 'INFO: root.pxar: had to backup':
+            size = archive[offset+8]
+            size_unit = archive[offset+9]
         size_numbers = float(size[:len(size)-2])
         size_cal = -1
-        
+
         # Norm to Byte
         # .../share/check_mk/web/plugins/metrics/check_mk.py
         if size_unit == "TB":
@@ -209,6 +214,8 @@ def check_lxc_backup(item, params, info):
         if archive[offset+4] == "archive":
             size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
         if archive[offset+3] + ' ' + archive[offset+4] + ' ' + archive[offset+5] + ' ' + archive[offset+6] + ' ' + archive[offset+7] == 'INFO: root.pxar: had to upload':
+            size_infotext = "upload size: " + str(size_numbers) + ' ' + size_unit
+        if archive[offset+3] + ' ' + archive[offset+4] + ' ' + archive[offset+5] + ' ' + archive[offset+6] + ' ' + archive[offset+7] == 'INFO: root.pxar: had to backup':
             size_infotext = "upload size: " + str(size_numbers) + ' ' + size_unit
         if size_cal >= warn_size:
             yield 0, size_infotext, perfdata
