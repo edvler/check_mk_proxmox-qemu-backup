@@ -52,6 +52,7 @@ def check_qemu_backup(item, params, info):
     finished="nothing"
     started="nothing"
     file_created="nothing"
+    incremental=False
 
     vzdump_is_running = 0
 
@@ -125,6 +126,9 @@ def check_qemu_backup(item, params, info):
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Starting Backup of VM':
                     started = line
                     started_datetime = d
+                if 'incremental' in line or 'incrementally' in line:
+                    incremental = True
+                    size, size_unit = '0', 'B'
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Finished Backup of VM':
                     finished = line
 
@@ -154,7 +158,7 @@ def check_qemu_backup(item, params, info):
         return
 
     #no warnings and erros!! check if lines indicating a successfull backup exists
-    if archive != "nothing" and finished != "nothing" and started != "nothing" and file_created != "nothing":
+    if (archive != "nothing" or incremental) and finished != "nothing" and started != "nothing" and file_created != "nothing":
 
 
         warn, error = params['backup_age']
@@ -181,9 +185,9 @@ def check_qemu_backup(item, params, info):
         if archive[offset+4] == "transferred":
             size = archive[offset+5]
             size_unit = archive[offset+6]
-        size_numbers = float(size[:len(size)-2])
+        size_numbers = float(size[:max(len(size)-2, 1)])
         size_cal = -1
-        
+
         # Norm to Byte
         # .../share/check_mk/web/plugins/metrics/check_mk.py
         if size_unit == "TB":
@@ -202,7 +206,7 @@ def check_qemu_backup(item, params, info):
             size_cal = size_numbers*1000*1000
         if size_unit == "KiB":
             size_cal = size_numbers*1000
-        
+
         # metrics from .../share/check_mk/web/plugins/metrics/check_mk.py
         perfdata = [
             ( "backup_age", int(old), warn, error ),
@@ -216,17 +220,20 @@ def check_qemu_backup(item, params, info):
         if old >= error:
             yield 2, infotext, perfdata
 
-        
+
 
         if archive[offset+4] == "archive":
             size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
-        if archive[offset+4] == "transferred":
+        elif archive[offset+4] == "transferred":
             size_infotext = "transferred size: " + str(size_numbers) + ' ' + size_unit
-        if size_cal >= warn_size:
+        else:
+            size_infotext = "empty incremental backup"
+
+        if size_cal >= warn_size or incremental:
             yield 0, size_infotext, perfdata
-        if size_cal < warn_size and size_cal >= error_size:
+        elif size_cal < warn_size and size_cal >= error_size:
             yield 1, size_infotext, perfdata
-        if size_cal < error_size:
+        elif size_cal < error_size:
             yield 2, size_infotext, perfdata
 
         return
