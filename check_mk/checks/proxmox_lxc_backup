@@ -67,7 +67,7 @@ def check_lxc_backup(item, params, info):
             #if taskinfos[6] == lxc_id:
             #    vzdump_is_running = 1
             for x in line:
-            	if x == lxc_id:
+                if x == lxc_id:
                     vzdump_is_running = 1
 
         #is this line of the given item (lxc_id)
