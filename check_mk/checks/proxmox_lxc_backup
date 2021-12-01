@@ -177,7 +177,7 @@ def check_lxc_backup(item, params, info):
         if archive[offset+3] + ' ' + archive[offset+4] + ' ' + archive[offset+5] + ' ' + archive[offset+6] + ' ' + archive[offset+7] == 'INFO: root.pxar: had to backup':
             size = archive[offset+8]
             size_unit = archive[offset+9]
-        size_numbers = float(size.strip())
+        size_numbers = float(size[:len(size)-2])
         size_cal = -1
         
         # Norm to Byte
