@@ -135,14 +135,17 @@ def check_qemu_backup(item, params, info):
             except IndexError:
                 pass
 
+            lineAdded=False
             #search for keywords
             for content in line:
-                if 'warn' in content.lower():
+                if 'warn' in content.lower() and lineAdded==False:
                     warn_count += 1
                     warn_msg += " ".join(line[offset+3:]) + "; "
-                elif 'error' in content.lower() or 'fail' in content.lower():
+                    lineAdded=True
+                elif ('error' in content.lower() or 'fail' in content.lower()) and lineAdded==False:
                     error_count += 1
                     error_msg += " ".join(line[offset+3:]) + "; "
+                    lineAdded=True
 
     #if line_count is 0, no backup file exists --> error!
     if line_count == 0:
