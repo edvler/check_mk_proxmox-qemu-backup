@@ -14,7 +14,7 @@ from cmk.gui.valuespec import (
 import cmk.utils.version as cmk_version
 
 register_check_parameters(
-    subgroup_os,
+    RulespecGroupCheckParametersVirtualization,
     "proxmox",
     _("Proxmox VM guest backup"),
     Dictionary(
