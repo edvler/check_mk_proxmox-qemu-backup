@@ -11,7 +11,7 @@ from cmk.gui.plugins.wato import (
 from cmk.gui.valuespec import (
     DropdownChoice,
 )
-#import cmk.utils.version as cmk_version
+import cmk.utils.version as cmk_version
 
 register_check_parameters(
     RulespecGroupCheckParametersVirtualization,
@@ -67,29 +67,29 @@ register_check_parameters(
     match_type = "dict",
 )
 
-#if cmk_version.is_enterprise_version() or cmk_version.is_managed_version():
-#    from cmk.gui.cee.plugins.wato.agent_bakery.rulespecs.utils import (
-#        RulespecGroupMonitoringAgentsAgentPlugins,
-#    )
-#
-#
-#    def _valuespec_proxmox_qemu_backup():
-#        return DropdownChoice(
-#            title = _("Proxmox VE guest backup"),
-#            help = _(
-#                "This will deploy the agent plugin <tt>proxmox_qemu_backup</tt>"
-#            ),
-#            choices = [
-#                (True, _("Deploy plugin for Proxmox VE guest backups")),
-#                (False, _("Do not deploy plugin for Proxmox VE guest backups")),
-#            ]
-#        )
-#
-#    rulespec_registry.register(
-#        HostRulespec(
-#            group=RulespecGroupMonitoringAgentsAgentPlugins,
-#            name="agent_config:proxmox_qemu_backup",
-#            valuespec=_valuespec_proxmox_qemu_backup,
-#        )
-#    )
+if cmk_version.is_enterprise_version() or cmk_version.is_managed_version():
+    from cmk.gui.cee.plugins.wato.agent_bakery.rulespecs.utils import (
+        RulespecGroupMonitoringAgentsAgentPlugins,
+    )
+
+
+    def _valuespec_proxmox_qemu_backup():
+        return DropdownChoice(
+            title = _("Proxmox VE guest backup"),
+            help = _(
+                "This will deploy the agent plugin <tt>proxmox_qemu_backup</tt>"
+            ),
+            choices = [
+                (True, _("Deploy plugin for Proxmox VE guest backups")),
+                (False, _("Do not deploy plugin for Proxmox VE guest backups")),
+            ]
+        )
+
+    rulespec_registry.register(
+        HostRulespec(
+            group=RulespecGroupMonitoringAgentsAgentPlugins,
+            name="agent_config:proxmox_qemu_backup",
+            valuespec=_valuespec_proxmox_qemu_backup,
+        )
+    )
 

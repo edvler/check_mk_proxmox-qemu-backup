@@ -1,0 +1,32 @@
+title: Plugin to check Proxmox VM guest (QEMU) backups 
+agents: linux
+author: Matthias Maderer <edvler@edvler-blog.de>
+license: GPLv2
+distribution: check_mk
+description:
+ This check runs on Proxmox Servers.
+
+ It reads all configs in the direcotry /etc/pve/qemu-server/.
+ For each VM guest found a service is created. The service read all
+ logfiles under /var/log/vzdump/ and parses it.
+
+ The default is that the service gets {critical} if no backup exists or the backup is
+ older than 30 hours. It gets {warning} if the backup is older than 26 hours.
+ 
+ The {critical} and {warning} limits can be configured in WATO.
+ The check can also be disabled for a VM guest.
+ It's possible to define the runtime (duration) of the backup-process.
+ In this time the checks stays {ok} if the backup task is currently running.
+ Goto WATO - Host & Service Parameters. Search for proxmox.
+
+ Newly created VM guest are displayed as new service by the check_mk
+ inventory check.
+
+ {Installation:}
+ https://github.com/edvler/check_mk_proxmox-qemu-backup/README.md
+ 
+ Check https://github.com/edvler/check_mk_proxmox-qemu-backup
+ for more informations.
+
+inventory:
+ One service will be created for each VM guest.

@@ -1,15 +1,15 @@
-# [Check MK](https://mathias-kettner.de/check_mk.html) Plugin to check [Proxmox](https://www.proxmox.com) VM guest (QEMU) backups
+# [Check MK](https://checkmk.com) Plugin to check [Proxmox](https://www.proxmox.com) VM guest (QEMU) backups
 
 # Installation
 
 ## On the Monitoring Server where Check_mk is installed:
-For a detailed description how to work with mkp's goto [https://mathias-kettner.de/cms_mkps.html](https://mathias-kettner.de/cms_mkps.html).
+For a detailed description how to work with mkp's goto [https://docs.checkmk.com/latest/de/mkps.html](https://docs.checkmk.com/latest/de/mkps.html).
 
 ### Short tasks
-0. Login with your site user (user has the same name as the CMK-Site)
-1. copy the proxmox_qemu_check*.mkp (see [dist](dist) folder) to your Check_mk server into the /tmp folder.
-2. mkp install /tmp/proxmox_qemu_check*.mk
-3. Check if installation worked
+1. copy the XXXXXX.mkp (see [dist](dist) folder) to your Check_mk server into the /tmp folder.
+2. su - <SITE_NAME> (mkp has to be installed on every site you are running!)
+3. mkp install /tmp/XXXXXX.mkp (replace XXXXXX with the filename downloaded)
+4. Check if installation worked
 ```
 SITEUSER@monitoring01:/opt/omd# find . -name '*proxmox_qemu_*'
 ./sites/XXXX/local/share/check_mk/checks/proxmox_qemu_backup
@@ -17,7 +17,7 @@ SITEUSER@monitoring01:/opt/omd# find . -name '*proxmox_qemu_*'
 ./sites/XXXX/local/share/check_mk/web/plugins/wato/check_parameters_proxmox_qemu_backup.py
 ./sites/XXXX/local/share/check_mk/agents/plugins/proxmox_qemu_backup
 ```
-4. Goto your Check_mk webinterface. Choose WATO -> Host & Service Parameters. Search for proxmox.
+5. Goto your Check_mk webinterface. Open "Service Rules" and search for proxmox.
 
 ## On the Proxmox Server (NOT THE CHECK_MK SERVER!):
 1. Copy the plugin script [check_mk/agents/plugins/proxmox_qemu_backup](check_mk/agents/plugins/proxmox_qemu_backup) into /usr/lib/check_mk_agent/plugins/
