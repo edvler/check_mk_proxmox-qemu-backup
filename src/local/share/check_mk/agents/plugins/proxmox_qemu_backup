@@ -9,7 +9,7 @@ QEMU_SERVER_DIR=/etc/pve/qemu-server
 LXC_SERVER_DIR=/etc/pve/lxc
 VZDUMP_LOG_DIR=/var/log/vzdump
 
-if [ ! -f "$QEMU_SERVER_DIR" ]; then
+if [ ! -d "$QEMU_SERVER_DIR" ]; then
     exit 0
 fi
 
