@@ -4,20 +4,24 @@
 # License: GPLv2
 
 from cmk.gui.i18n import _
-from cmk.gui.plugins.wato import (
-    HostRulespec,
-    rulespec_registry,
-)
 from cmk.gui.valuespec import (
+    Dictionary,
     DropdownChoice,
+    Tuple,
+    TextAscii,
+    Age,
+    Integer
 )
-#import cmk.utils.version as cmk_version
 
-register_check_parameters(
-    RulespecGroupCheckParametersVirtualization,
-    "proxmox",
-    _("Proxmox VM guest backup"),
-    Dictionary(
+from cmk.gui.plugins.wato import (
+    CheckParameterRulespecWithItem,
+    rulespec_registry,
+    RulespecGroupCheckParametersStorage
+)
+
+
+def register_check_parameters_proxmox_qemu_backup():
+    return Dictionary(
         elements = [
             ("check_backup",
              DropdownChoice(
@@ -59,13 +63,19 @@ register_check_parameters(
                 ),
             )
         ]
-    ),
-    TextAscii(
-        title = _("Description"),
-        allow_empty = True
-    ),
-    match_type = "dict",
-)
+    )
+
+
+rulespec_registry.register(
+    CheckParameterRulespecWithItem(
+        check_group_name="proxmox",
+        group=RulespecGroupCheckParametersStorage,
+        item_spec=lambda: TextAscii(title=_('Proxmox VM guest backup'), ),
+        match_type='dict',
+        parameter_valuespec=register_check_parameters_proxmox_qemu_backup,
+        title=lambda: _("Proxmox VM guest backup"),
+    ))
+
 
 #if cmk_version.is_enterprise_version() or cmk_version.is_managed_version():
 #    from cmk.gui.cee.plugins.wato.agent_bakery.rulespecs.utils import (

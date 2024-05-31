@@ -289,7 +289,7 @@ register.check_plugin(
     discovery_function = inventory_qemu_backup,
     check_function = check_qemu_backup,
     check_default_parameters = {'check_backup': 'check', 'backup_age': (93600, 108000), 'running_time': 1800},
-    check_ruleset_name = "proxmox_backup_vzdump"
+    check_ruleset_name = "proxmox"
 )
 
 
