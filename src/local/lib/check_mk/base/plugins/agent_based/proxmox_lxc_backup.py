@@ -6,26 +6,28 @@
 # URL: https://github.com/edvler/check_mk_proxmox-lxc-backup
 # License: GPLv2
 
-
-# default parameters
-proxmox_lxc_backup_default_levels = {'check_backup': 'check', 'backup_age': (93600, 108000), 'running_time': 1800}
+from .agent_based_api.v1 import *
+import time
+import datetime
+import re
 
 # the inventory function (dummy)
-def inventory_lxc_backup(info):
+def inventory_lxc_backup(section):
     # loop over all output lines of the agent
-    for line in info:
+    for line in section:
         if line[0].startswith('LXC-MACHINE;;;;;'):
             arr_lxc_vars = line[0].split(';;;;;')
             arr_lxc_id = arr_lxc_vars[1].split('/')
             lxc_id = arr_lxc_id[-1].replace('.conf','')
-            yield arr_lxc_vars[2] + " Id: " + lxc_id + "", "proxmox_lxc_backup_default_levels"
+            yield Service(item=arr_lxc_vars[2] + " Id: " + lxc_id + "")
 
 # the check function (dummy)
-def check_lxc_backup(item, params, info):
+def check_lxc_backup(item, params, section):
     #return 0 if check of backups should not be done
     if params['check_backup'] == 'ignore':
        # return 0, 'check disabled by rule'
-        yield 0, 'check disabled by rule'
+#        yield 0, 'check disabled by rule'
+        yield Result(state=State.OK, summary='check disabled by rule')
         return
 
 
@@ -59,7 +61,7 @@ def check_lxc_backup(item, params, info):
     offset=0
 
     #check all lines
-    for line in info:
+    for line in section:
         #Check for running tasks
         #task UPID:pve01:00000E8D:009D1950:5E344CAA:vzdump:101:root@pam:
         if line[0] == 'PSOUTPUT':
@@ -137,22 +139,22 @@ def check_lxc_backup(item, params, info):
 
     #if line_count is 0, no backup file exists --> error!
     if line_count == 0:
-        yield 2, "no backup exists for this VM guest"
+        yield Result(state=State.CRIT, summary="no backup exists for this VM guest")
         return
 
     #check counter
     if error_count > 0:
-        yield 2, error_msg
+        yield Result(state=State.CRIT, summary=error_msg)
         return
     if warn_count > 0:
-        yield 1, warn_msg
+        yield Result(state=State.CRIT, summary=warn_msg)
         return
     #no warnings and erros!! check if lines indicating a successfull backup exists
     if (archive != "nothing" or incremental) and finished != "nothing" and started != "nothing" and file_created != "nothing":
 
         warn, error = params['backup_age']
 
-	# Age of Backup
+        # Age of Backup
         old = time.time() - time.mktime(startdate)
         duration_formatted = pretty_time_delta(old)
         infotext = 'last backup: ' + time.strftime("%Y-%m-%d %H:%M", startdate) + ' (Age: ' + duration_formatted + ' warn/crit at ' + pretty_time_delta(warn) + '/' + pretty_time_delta(error) + ')'
@@ -179,7 +181,7 @@ def check_lxc_backup(item, params, info):
             size_unit = archive[offset+9]
         size_numbers = float(size[:len(size)-2])
         size_cal = -1
-        
+
         # Norm to Byte
         # .../share/check_mk/web/plugins/metrics/check_mk.py
         if size_unit == "TB":
@@ -205,11 +207,14 @@ def check_lxc_backup(item, params, info):
         ]
 
         if old < warn:
-            yield 0, infotext, perfdata
+            yield Result(state=State.OK, summary=infotext)
+            #yield 0, infotext, perfdata
         if old >= warn and old < error:
-            yield 1, infotext, perfdata
+            yield Result(state=State.WARN, summary=infotext)
+            #yield 1, infotext, perfdata
         if old >= error:
-            yield 2, infotext, perfdata
+            yield Result(state=State.CRIT, summary=infotext)
+            #yield 2, infotext, perfdata
 
         if archive[offset+4] == "archive":
             size_infotext = "Archive size: " + str(size_numbers) + ' ' + size_unit
@@ -221,11 +226,14 @@ def check_lxc_backup(item, params, info):
             size_infotext = "empty incremental backup"
 
         if size_cal >= warn_size or incremental:
-            yield 0, size_infotext, perfdata
+            yield Result(state=State.OK, summary=size_infotext)
+            #yield 0, size_infotext, perfdata
         elif size_cal < warn_size and size_cal >= error_size:
-            yield 1, size_infotext, perfdata
+            yield Result(state=State.WARN, summary=size_infotext)
+            #yield 1, size_infotext, perfdata
         elif size_cal < error_size:
-            yield 2, size_infotext, perfdata
+            yield Result(state=State.CRIT, summary=size_infotext)
+            #yield 2, size_infotext, perfdata
 
         return
     elif started != "nothing":
@@ -235,23 +243,29 @@ def check_lxc_backup(item, params, info):
     if vzdump_is_running == 1:
         old = time.time() - time.mktime(started_datetime)
         if old < params['running_time']:
-            yield 0, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
+            yield Result(state=State.OK, summary='backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime))
+            #yield 0, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
             return
         else:
-            yield 1, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
+            yield Result(state=State.WARN, summary='backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime))
+            #yield 1, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
             return
 
-    yield 3, "error occured in check plugin. Please post a issue on https://github.com/edvler/check_mk_proxmox-lxc-backup/issues inlcuding the output of the agent plugin /usr/lib/check_mk_agent/plugins/proxmox-lxc-backup"
+    #yield 3, "error occured in check plugin. Please post a issue on https://github.com/edvler/check_mk_proxmox-lxc-backup/issues inlcuding the output of the agent plugin /usr/lib/check_mk_agent/plugins/proxmox-lxc-backup"
+    yield Result(state=State.UNKOWN, summary="error occured in check plugin. Please post a issue on https://github.com/edvler/check_mk_proxmox-lxc-backup/issues inlcuding the output of the agent plugin /usr/lib/check_mk_agent/plugins/proxmox-lxc-backup")
     return
 
-# declare the check to Check_MK
-check_info["proxmox_lxc_backup"] = {
-    'check_function':            check_lxc_backup,
-    'inventory_function':        inventory_lxc_backup,
-    'service_description':       'Proxmox LXC VM backup %s',
-    'group':                     'proxmox',
-    'has_perfdata':              True,
-}
+register.check_plugin(
+    name = "proxmox_lxc_backup",
+    service_name = "Proxmox LXC VM backup %s",
+    discovery_function = inventory_lxc_backup,
+    check_function = check_lxc_backup,
+    check_default_parameters = {'check_backup': 'check', 'backup_age': (93600, 108000), 'running_time': 1800},
+    check_ruleset_name = "proxmox_backup_vzdump"
+)
+
+
+
 
 def getDateFromFileCreated(vma_name):
     if "T" in vma_name:
@@ -403,18 +417,4 @@ def pretty_time_delta(seconds):
 #/var/log/vzdump/lxc-106.log 2018-02-22 14:30:31 INFO: archive file size: 7.53GB
 #/var/log/vzdump/lxc-106.log 2018-02-22 14:30:31 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-lxc-106-2018_02_13-14_11_04.vma.gz'
 #/var/log/vzdump/lxc-106.log 2018-02-22 14:30:32 INFO: Finished Backup of VM 106 (00:19:28)
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:30:32 INFO: Starting Backup of VM 108 (lxc)
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:30:32 INFO: status = running
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:30:32 INFO: update VM 108: -lock backup
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:30:32 INFO: VM Name: monitoring01
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:30:32 INFO: include disk 'virtio0' 'ST2000DM-tpool-001:vm-108-disk-1' 32G
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:30:33 INFO: backup mode: snapshot
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:30:33 INFO: ionice priority: 7
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:30:33 INFO: creating archive '/vmfs/bkp-vol-001/dump/vzdump-lxc-108-2018_02_22-14_30_32.vma.gz'
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:30:34 INFO: started backup task '5d28af3d-8d8e-4bd8-ad38-3ec688f66f24'
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:37:36 INFO: transferred 34359 MB in 422 seconds (81 MB/s)
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:37:36 INFO: archive file size: 2.82GB
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:37:36 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-lxc-108-2018_02_13-14_29_14.vma.gz'
-#/var/log/vzdump/lxc-108.log 2018-02-22 14:37:37 INFO: Finished Backup of VM 108 (00:07:05)
-
 

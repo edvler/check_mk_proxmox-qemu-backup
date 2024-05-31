@@ -6,26 +6,28 @@
 # URL: https://github.com/edvler/check_mk_proxmox-qemu-backup
 # License: GPLv2
 
-
-# default parameters
-proxmox_qemu_backup_default_levels = {'check_backup': 'check', 'backup_age': (93600, 108000), 'running_time': 1800}
+from .agent_based_api.v1 import *
+import time
+import datetime
+import re
 
 # the inventory function (dummy)
-def inventory_qemu_backup(info):
+def inventory_qemu_backup(section):
     # loop over all output lines of the agent
-    for line in info:
+    for line in section:
         if line[0].startswith('QEMU-MACHINE;;;;;'):
             arr_qemu_vars = line[0].split(';;;;;')
             arr_qemu_id = arr_qemu_vars[1].split('/')
             qemu_id = arr_qemu_id[-1].replace('.conf','')
-            yield arr_qemu_vars[2] + " Id: " + qemu_id + "", "proxmox_qemu_backup_default_levels"
+            yield Service(item=arr_qemu_vars[2] + " Id: " + qemu_id + "")
 
 # the check function (dummy)
-def check_qemu_backup(item, params, info):
+def check_qemu_backup(item, params, section):
     #return 0 if check of backups should not be done
     if params['check_backup'] == 'ignore':
        # return 0, 'check disabled by rule'
-        yield 0, 'check disabled by rule'
+        yield Result(state=State.OK, summary='check disabled by rule')
+#        yield 0, 'check disabled by rule'
         return
 
 
@@ -48,6 +50,7 @@ def check_qemu_backup(item, params, info):
     error_count=0
     error_msg=""
 
+
     archive="nothing"
     finished="nothing"
     started="nothing"
@@ -59,7 +62,7 @@ def check_qemu_backup(item, params, info):
     offset=0
 
     #check all lines
-    for line in info:
+    for line in section:
         #Check for running tasks
         #task UPID:pve01:00000E8D:009D1950:5E344CAA:vzdump:101:root@pam:
         if line[0] == 'PSOUTPUT':
@@ -67,7 +70,7 @@ def check_qemu_backup(item, params, info):
             #if taskinfos[6] == qemu_id:
             #    vzdump_is_running = 1
             for x in line:
-            	if x == qemu_id:
+                if x == qemu_id:
                     vzdump_is_running = 1
 
         #is this line of the given item (qemu_id)
@@ -78,8 +81,8 @@ def check_qemu_backup(item, params, info):
             #old /var/log/vzdump/qemu-104.log Feb 07 12:10:54 INFO: creating archive '/vmfs/bkp-fs-stor-001/dump/vzdump-qemu-104-2018_02_07-12_10_54.vma.gz'
             #new /var/log/vzdump/qemu-105.log 2018-02-06 16:00:03 INFO: creating archive '/vmfs/bkp-urbackup01-001/dump/vzdump-qemu-105-2018_02_06-16_00_02.vma.gz'
             d = ""
-            
-            
+
+
             if len(line) < 3:
                 continue
 
@@ -142,7 +145,6 @@ def check_qemu_backup(item, params, info):
                     size, size_unit = '0', 'B'
                 if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Finished Backup of VM':
                     finished = line
-
             except IndexError:
                 pass
 
@@ -160,15 +162,18 @@ def check_qemu_backup(item, params, info):
 
     #if line_count is 0, no backup file exists --> error!
     if line_count == 0:
-        yield 2, "no backup exists for this VM guest"
+        yield Result(state=State.CRIT, summary="no backup exists for this VM guest")
+#        yield 2, "no backup exists for this VM guest"
         return
 
     #check counter
     if error_count > 0:
-        yield 2, error_msg
+        yield Result(state=State.CRIT, summary=error_msg)
+#        yield 2, error_msg
         return
     if warn_count > 0:
-        yield 1, warn_msg
+        #yield 1, warn_msg
+        yield Result(state=State.CRIT, summary=warn_msg)
         return
 
     #no warnings and erros!! check if lines indicating a successfull backup exists
@@ -177,7 +182,7 @@ def check_qemu_backup(item, params, info):
 
         warn, error = params['backup_age']
 
-	# Age of Backup
+        # Age of Backup
         old = time.time() - time.mktime(startdate)
         duration_formatted = pretty_time_delta(old)
         infotext = 'last backup: ' + time.strftime("%Y-%m-%d %H:%M", startdate) + ' (Age: ' + duration_formatted + ' warn/crit at ' + pretty_time_delta(warn) + '/' + pretty_time_delta(error) + ')'
@@ -228,11 +233,14 @@ def check_qemu_backup(item, params, info):
         ]
 
         if old < warn:
-            yield 0, infotext, perfdata
+#            yield 0, infotext, perfdata
+            yield Result(state=State.OK, summary=infotext)
         if old >= warn and old < error:
-            yield 1, infotext, perfdata
+#            yield 1, infotext, perfdata
+            yield Result(state=State.WARN, summary=infotext)
         if old >= error:
-            yield 2, infotext, perfdata
+#            yield 2, infotext, perfdata
+            yield Result(state=State.CRIT, summary=infotext)
 
 
 
@@ -244,11 +252,14 @@ def check_qemu_backup(item, params, info):
             size_infotext = "empty incremental backup"
 
         if size_cal >= warn_size or incremental:
-            yield 0, size_infotext, perfdata
+            yield Result(state=State.OK, summary=size_infotext)
+#            yield 0, size_infotext, perfdata
         elif size_cal < warn_size and size_cal >= error_size:
-            yield 1, size_infotext, perfdata
+            yield Result(state=State.WARN, summary=size_infotext)
+#            yield 1, size_infotext, perfdata
         elif size_cal < error_size:
-            yield 2, size_infotext, perfdata
+            yield Result(state=State.CRIT, summary=size_infotext)
+ #           yield 2, size_infotext, perfdata
 
         return
 
@@ -259,23 +270,30 @@ def check_qemu_backup(item, params, info):
     if vzdump_is_running == 1:
         old = time.time() - time.mktime(started_datetime)
         if old < params['running_time']:
-            yield 0, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
+#            yield 0, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
+            yield Result(state=State.OK, summary='backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime))
             return
         else:
-            yield 1, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
+ #           yield 1, 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime)
+            yield Result(state=State.WARN, summary='backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime))
             return
 
-    yield 3, "error occured in check plugin. Please post a issue on https://github.com/edvler/check_mk_proxmox-qemu-backup/issues inlcuding the output of the agent plugin /usr/lib/check_mk_agent/plugins/proxmox-qemu-backup"
+    yield Result(state=State.UNKOWN, summary="error occured in check plugin. Please post a issue on https://github.com/edvler/check_mk_proxmox-lxc-backup/issues inlcuding the output of the agent plugin /usr/lib/check_mk_agent/plugins/proxmox-lxc-backup")
+#    yield 3, "error occured in check plugin. Please post a issue on https://github.com/edvler/check_mk_proxmox-qemu-backup/issues inlcuding the output of the agent plugin /usr/lib/check_mk_agent/plugins/proxmox-qemu-backup"
     return
 
-# declare the check to Check_MK
-check_info["proxmox_qemu_backup"] = {
-    'check_function':            check_qemu_backup,
-    'inventory_function':        inventory_qemu_backup,
-    'service_description':       'Proxmox QEMU VM backup %s',
-    'group':                     'proxmox',
-    'has_perfdata':              True,
-}
+
+register.check_plugin(
+    name = "proxmox_qemu_backup",
+    service_name = "Proxmox QEMU VM backup %s",
+    discovery_function = inventory_qemu_backup,
+    check_function = check_qemu_backup,
+    check_default_parameters = {'check_backup': 'check', 'backup_age': (93600, 108000), 'running_time': 1800},
+    check_ruleset_name = "proxmox_backup_vzdump"
+)
+
+
+
 
 def getDateFromFileCreated(vma_name):
     if "T" in vma_name:
@@ -381,62 +399,3 @@ def pretty_time_delta(seconds):
 #/var/log/vzdump/qemu-103.log 2017-09-05 13:02:25 INFO: stopping kvm after backup task
 #/var/log/vzdump/qemu-103.log 2017-09-05 13:02:28 INFO: archive file size: 33.09GB
 #/var/log/vzdump/qemu-103.log 2017-09-05 13:02:28 INFO: Finished Backup of VM 103 (01:11:58)
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:02 INFO: Starting Backup of VM 104 (qemu)
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:02 INFO: status = running
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: update VM 104: -lock backup
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: VM Name: zbox
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: exclude disk 'virtio0' 'ssd-850evo-tpool-001:vm-104-disk-1' (backup=no)
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: exclude disk 'virtio1' 'ST2000DM-tpool-001:vm-104-disk-4' (backup=no)
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: exclude disk 'virtio2' 'ST2000DM-tpool-001:vm-104-disk-1' (backup=no)
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: exclude disk 'virtio3' 'ST2000DM-tpool-001:vm-104-disk-2' (backup=no)
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: exclude disk 'virtio15' 'bkp-zbox-wss-001:104/vm-104-disk-1.raw' (backup=no)
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: backup mode: snapshot
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: ionice priority: 7
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: pending configuration changes found (not included into backup)
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: creating archive '/vmfs/bkp-vol-001/dump/vzdump-qemu-104-2018_02_22-14_11_02.vma.gz'
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: backup contains no disks
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: starting template backup
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:03 INFO: /usr/bin/vma create -v -c /vmfs/bkp-vol-001/dump/vzdump-qemu-104-2018_02_22-14_11_02.tmp/qemu-server.conf exec:gzip > /vmfs/bkp-vol-001/dump/vzdump-qemu-104-2018_02_22-14_11_02.vma.dat
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:04 INFO: archive file size: 0KB
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:04 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-qemu-104-2018_02_13-14_11_02.vma.gz'
-#/var/log/vzdump/qemu-104.log 2018-02-22 14:11:04 INFO: Finished Backup of VM 104 (00:00:02)
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: Starting Backup of VM 105 (qemu)
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: status = running
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: update VM 105: -lock backup
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: VM Name: urbackup01
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: include disk 'virtio0' 'WDC15EADS-tpool-001:vm-105-disk-1' 32G
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:02 INFO: exclude disk 'virtio1' 'bkp-urbackup01-001:105/vm-105-disk-1.qcow2' (backup=no)
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:03 INFO: backup mode: snapshot
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:03 INFO: ionice priority: 7
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:03 INFO: creating archive '/vmfs/bkp-urbackup01-001/dump/vzdump-qemu-105-2018_02_22-16_00_02.vma.gz'
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:00:03 INFO: started backup task '459b5abe-aa47-47f0-9bc1-144ab9cabe54'
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:18:47 INFO: transferred 34359 MB in 1124 seconds (30 MB/s)
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:18:47 INFO: archive file size: 7.03GB
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:18:47 INFO: delete old backup '/vmfs/bkp-urbackup01-001/dump/vzdump-qemu-105-2018_02_15-16_00_02.vma.gz'
-#/var/log/vzdump/qemu-105.log 2018-02-22 16:18:47 INFO: Finished Backup of VM 105 (00:18:45)
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:04 INFO: Starting Backup of VM 106 (qemu)
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:04 INFO: status = running
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: update VM 106: -lock backup
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: VM Name: server02
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: include disk 'virtio0' 'ST2000DM-tpool-001:vm-106-disk-1' 32G
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: backup mode: snapshot
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: ionice priority: 7
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: creating archive '/vmfs/bkp-vol-001/dump/vzdump-qemu-106-2018_02_22-14_11_04.vma.gz'
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:11:05 INFO: started backup task '45a19f0d-dfcb-43d8-bcb2-9ce11cdecfb4'
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:30:31 INFO: transferred 34359 MB in 1166 seconds (29 MB/s)
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:30:31 INFO: archive file size: 7.53GB
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:30:31 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-qemu-106-2018_02_13-14_11_04.vma.gz'
-#/var/log/vzdump/qemu-106.log 2018-02-22 14:30:32 INFO: Finished Backup of VM 106 (00:19:28)
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:32 INFO: Starting Backup of VM 108 (qemu)
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:32 INFO: status = running
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:32 INFO: update VM 108: -lock backup
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:32 INFO: VM Name: monitoring01
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:32 INFO: include disk 'virtio0' 'ST2000DM-tpool-001:vm-108-disk-1' 32G
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:33 INFO: backup mode: snapshot
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:33 INFO: ionice priority: 7
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:33 INFO: creating archive '/vmfs/bkp-vol-001/dump/vzdump-qemu-108-2018_02_22-14_30_32.vma.gz'
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:30:34 INFO: started backup task '5d28af3d-8d8e-4bd8-ad38-3ec688f66f24'
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: transferred 34359 MB in 422 seconds (81 MB/s)
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: archive file size: 2.82GB
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:37:36 INFO: delete old backup '/vmfs/bkp-vol-001/dump/vzdump-qemu-108-2018_02_13-14_29_14.vma.gz'
-#/var/log/vzdump/qemu-108.log 2018-02-22 14:37:37 INFO: Finished Backup of VM 108 (00:07:05)
