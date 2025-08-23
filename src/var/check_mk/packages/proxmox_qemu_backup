@@ -1,32 +1,6 @@
 {'author': 'Matthias Maderer <matthias.maderer@web.de>',
  'description': 'This check outputs the status and age of Proxmox VE guest '
-                'backups done via vzdump or Proxmox Backup Server.\n'
-                '\n'
-                'It reads all configs in the direcotry /etc/pve/qemu-server/.\n'
-                'For each VM guest found a service is created. The service '
-                'read all logfiles under /var/log/vzdump/ and parses it for '
-                'WARN and ERROR entrys.\n'
-                'Logs from Proxmox Backup Server backup processes also located '
-                'in /var/log/vzdump/ and are also checked.\n'
-                '\n'
-                'The {critical} and {warning} limits for the backup age can be '
-                'configured in WATO.\n'
-                '\n'
-                'Its possible to check the runtime (duration) of the '
-                'backup-process.\n'
-                'In this time the checks stays {ok} if the backup task is '
-                'currently running.\n'
-                '\n'
-                'Goto WATO - Host & Service Parameters. Search for proxmox.\n'
-                '\n'
-                'Newly created guest are displayed as new service by the '
-                'check_mkinventory check.\n'
-                '\n'
-                '{Installation:}https://github.com/edvler/check_mk_proxmox-qemu-backup/README.md\n'
-                '\n'
-                'Check '
-                'https://github.com/edvler/check_mk_proxmox-qemu-backupfor '
-                'more informations.\n',
+                'backups done via vzdump or Proxmox Backup Server.',
  'download_url': 'https://github.com/edvler/check_mk_proxmox-qemu-backup',
  'files': {'agents': ['plugins/proxmox_qemu_backup'],
            'cmk_addons_plugins': ['proxmox_qemu_backup/agent_based/proxmox_qemu_backup.py',
@@ -34,7 +8,7 @@
                                   'proxmox_qemu_backup/checkman/proxmox_qemu_backup']},
  'name': 'proxmox_qemu_backup',
  'title': 'Proxmox VM guest backup',
- 'version': '2.0.3',
+ 'version': '2.0.6',
  'version.min_required': '2.3.0',
  'version.packaged': 'cmk-mkp-tool 0.2.0',
  'version.usable_until': None}
