@@ -2,26 +2,19 @@
 
 
 # Author: Matthias Maderer
-# E-Mail: edvler@edvler-blog.de
+# E-Mail: matthias.maderer@web.de
 # URL: https://github.com/edvler/check_mk_proxmox-qemu-backup
 # License: GPLv2
 
 from cmk.agent_based.v2 import (
-    AgentSection,
     CheckPlugin,
-    CheckResult,
-    DiscoveryResult,
     Result,
     Service,
     State,
     Metric,
     render,
-    check_levels,
 )
 import time
-import datetime
-import re
-
 
 def params_parser(params):
     params_new = {}
@@ -34,66 +27,63 @@ def params_parser(params):
                 params_new[p] = ('fixed', (params[p][0], params[p][1]))
             else:
                 params_new[p] = params[p]
-        else: 
+        else:
+            if isinstance(params[p], int) and p == 'running_time':
+                params_new[p] = ('fixed',(float(params[p]),float(params[p] + 60*60))) # The old check only has a single int value for running_time
             params_new[p] = params[p]
 
-    
     return params_new
 
 
+
 def inventory_qemu_backup(section):
-    yield from _inventory(section,'QEMU')
-
-def inventory_lxc_backup(section):
-    yield from _inventory(section,'LXC')
-
-# the inventory function (dummy)
-def _inventory(section, vm_type):
     # loop over all output lines of the agent
     for line in section:
-        if line[0].startswith(vm_type + '-MACHINE;;;;;'):
+        if line[0].startswith('QEMU-MACHINE;;;;;'):
             arr_vars = line[0].split(';;;;;')
             arr_id = arr_vars[1].split('/')
             id = arr_id[-1].replace('.conf','')
-            yield Service(item=arr_vars[2] + " Id: " + id + "")
+            yield Service(item=arr_vars[2] + " Id: " + id)
 
-def check_qemu_backup(item, params, section):
-    yield from _check_backup(item, params, section, 'qemu')
+def inventory_lxc_backup(section):
+    # loop over all output lines of the agent
+    for line in section:
+        if line[0].startswith('LXC-MACHINE;;;;;'):
+            arr_vars = line[0].split(';;;;;')
+            arr_id = arr_vars[1].split('/')
+            id = arr_id[-1].replace('.conf','')
+            yield Service(item=arr_vars[2] + " Id: " + id)
 
-def check_lxc_backup(item, params, section):
-    yield from _check_backup(item, params, section, 'lxc')
 
-def _check_backup(item, params, section, vm_type):
+
+def _check_backup(item, params, section):
     params_cmk_24 = params_parser(params)
 
-    #get name of the logfile (the output of each logfile is
-    #prefixed with its filename from the plugin)
+    #prase id
     id=item.split(' ')[-1]
-    logfile = '/var/log/vzdump/' + vm_type + '-' + id + '.log'
 
-    #counter
-    line_count=0
-
-    warn_count=0
+    #initialize counter
     warn_msg=""
-    error_count=0
-    error_msg=""
-
+    crit_msg=""
 
     finished=None
-    started=None
+    started_datetime=None
 
     offset=0
 
     #check all lines
     for line in section:
-        #is this line of the given item (id)
-        if line[0] == logfile:
+        if not line[0].startswith('/var/log/vzdump/'):
+            continue
+
+        #extract id from line. e.g. /var/log/vzdump/qemu-104.log
+        id_in_log = line[0].replace('/var/log/vzdump/qemu-', '').replace('/var/log/vzdump/lxc-', '').replace('.log', '')
+
+        #is this line of the given item (id)?
+        if id_in_log == id:
             #Only proceed with usable lines (min. 4 array entries)
             if len(line) <= 3:
                 continue
-
-            line_count += 1 #count lines of log for this id
 
             #old or new dateformat in logfile?
             #old /var/log/vzdump/qemu-104.log Feb 07 12:10:54 INFO: creating archive '/vmfs/bkp-fs-stor-001/dump/vzdump-qemu-104-2018_02_07-12_10_54.vma.gz'
@@ -111,56 +101,41 @@ def _check_backup(item, params, section, vm_type):
             except ValueError:
                 pass
 
+            linetext = " ".join(line[offset+3:])
+
             #parse logtext
             try:
-                # found in all backup types (lxc, qemu, Proxmox Backup Server)
-                #if line[offset+3] + ' ' + line[offset+4] == 'INFO: creating':
-                #    file_created = line
-
-                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Starting Backup of VM':
-                    started = line
+                if linetext.startswith('INFO: Starting Backup of VM'):
                     started_datetime = date_logentry
 
-                if line[offset+3] + ' ' + line[offset+4] + ' ' + line[offset+5] + ' ' + line[offset+6] + ' ' + line[offset+7] == 'INFO: Finished Backup of VM':
-                    finished = line
+                if linetext.startswith('INFO: Finished Backup of VM'):
+                    finished = date_logentry
             except IndexError:
                 pass
 
-            #search for warn and error keywords
-            for content in line:
-                if 'warn' in content.lower():
-                    warn_count += 1
-                    warn_msg += " ".join(line[offset+3:]) + "; "
-                elif ('error' in content.lower() or 'fail' in content.lower()):
-                    error_count += 1
-                    error_msg += " ".join(line[offset+3:]) + "; "
+            #generate warn and crit messages
+            if linetext.startswith('WARN:'):
+                    warn_msg += linetext + "; "
+            if linetext.startswith('ERROR:'):
+                    crit_msg += linetext + "; "            
     #For each line END
 
-    #if line_count is 0, no backup file exists --> error!
-    if line_count == 0:
-        yield Result(state=State.CRIT, summary="Backup logfile is missing. No backup? Problems?")
+    #check for warn or crit messages
+    if crit_msg != "":
+        yield Result(state=State.CRIT, summary=crit_msg)
         return
-
-    #check counter
-    if error_count > 0:
-        yield Result(state=State.CRIT, summary=error_msg)
-        return
-    if warn_count > 0:
+    if warn_msg != "":
         yield Result(state=State.CRIT, summary=warn_msg)
         return
 
     #no warnings and erros!! check if lines indicating a successfull backup exists
-    if finished != None and started != None:
+    if finished != None and started_datetime != None:
         levels = params_cmk_24['backup_age'] if 'backup_age' in params_cmk_24 else None
 
         if levels == None or levels ==("no_levels", None):
             yield (Result(state=State.OK, summary="No check levels defined!"))
             return
-        
-        if 'backup_age' not in params_cmk_24:
-            yield (Result(state=State.UNKNOWN, summary="No backup_age defined, but - Use levels defined in this check - are choosen in rules!"))
-            return
-
+    
         warn, crit = params_cmk_24['backup_age'][1]
 
         # Age of Backup
@@ -176,38 +151,56 @@ def _check_backup(item, params, section, vm_type):
         else: #old >= crit:
             yield Result(state=State.CRIT, summary=infotext)
 
-    elif started != None:
+    elif started_datetime != None:
         old = time.time() - time.mktime(started_datetime)
-        if old < params['running_time']:
-            yield Result(state=State.OK, summary='backup is running since: ' + render.timespan(old))
-        else:
-            yield Result(state=State.WARN, summary='backup is running since: ' + render.timespan(old))
+
+        levels = params_cmk_24['running_time'] if 'running_time' in params_cmk_24 else None
+        if levels == None or levels ==("no_levels", None):
+            yield (Result(state=State.UNKNOWN, summary="Backup is running. Please define check levels to avoid situations where a backup hangs and fails to complete!"))
+            return
+
+        warn,crit = params_cmk_24['running_time'][1]
+
+        infotext = 'backup is running since: ' + time.strftime("%Y-%m-%d %H:%M", started_datetime) + ' (since: ' + render.timespan(old) + ' warn/crit at ' + render.timespan(warn) + '/' + render.timespan(crit) + ')'
+
+        if old < warn:
+            yield Result(state=State.OK, summary=infotext)
+        elif old >= warn and old < crit:
+            yield Result(state=State.WARN, summary=infotext)
+        else: #old >= crit:
+            yield Result(state=State.CRIT, summary=infotext)
 
     else:
-        yield Result(state=State.UNKNOWN, summary='no startime found in logfile. Check logfile for errors!')
+        yield Result(state=State.CRIT, summary='No startime found in logfile. Check the logfile of ' + id + ' in /var/log/vzdump/ for errors! Maybe IO-erros, incomplete logfile ...')
 
 
 check_plugin_proxmox_qemu_backup = CheckPlugin(
     name = "proxmox_qemu_backup",
     service_name = "Proxmox QEMU VM backup %s",
     discovery_function = inventory_qemu_backup,
-    check_function = check_qemu_backup,
+    check_function = _check_backup,
+    check_default_parameters = {
+                                'backup_age': ('fixed', (1.5 * 86400.0, 2 * 86400.0)),
+                                'running_time': ('fixed', (0.8 * 86400.0, 1 * 86400.0))
+                                },
+    check_ruleset_name = "proxmox"
+)
+
+
+
+check_plugin_proxmox_lxc_backup = CheckPlugin(
+    name = "proxmox_lxc_backup",
+    service_name = "Proxmox LXC VM backup %s",
+    discovery_function = inventory_lxc_backup,
+    check_function = _check_backup,
     check_default_parameters = {
                                 'backup_age': (1.5 * 86400.0, 2 * 86400.0)
                                 },
     check_ruleset_name = "proxmox"
 )
 
-check_plugin_proxmox_lxc_backup = CheckPlugin(
-    name = "proxmox_lxc_backup",
-    service_name = "Proxmox LXC VM backup %s",
-    discovery_function = inventory_lxc_backup,
-    check_function = check_lxc_backup,
-    check_default_parameters = {
-                                'backup_age': (1.5 * 86400.0, 2 * 86400.0)
-                                },
-    check_ruleset_name = "proxmox"
-)
+
+
 
 #Example output of agent
 #
