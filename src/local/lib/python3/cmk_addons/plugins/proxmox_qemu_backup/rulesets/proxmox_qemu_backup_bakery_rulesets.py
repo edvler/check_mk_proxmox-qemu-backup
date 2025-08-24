@@ -4,9 +4,6 @@
 # URL: https://github.com/edvler/check_mk_proxmox-qemu-backup
 # License: GPLv2
 
-#example: \lib\python3\cmk\gui\plugins\wato\check_parameters\memory.py
-
-
 from cmk.rulesets.v1 import Title, Help
 from cmk.rulesets.v1.form_specs import (
     DefaultValue,
@@ -24,8 +21,7 @@ def _valuespec_agent_config_proxmox_qemu_backup_bakery():
         elements={
             'deployment': DictElement(
                 required=True,
-                parameter_form=BooleanChoice(    
-                    #migrate=lambda model: _migrate_check_backup(model),
+                parameter_form=BooleanChoice(
                     title=Title('Deploy Proxmox Backup Logfile Check'),
                     prefill=DefaultValue(True),
                 )

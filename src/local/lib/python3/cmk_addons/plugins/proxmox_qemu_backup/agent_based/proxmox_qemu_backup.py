@@ -21,7 +21,7 @@ def params_parser(params):
 
     for p in params:
         if params[p] is not None and isinstance(params[p], tuple):
-            if params[p][0] in ("fixed", "no_levels", "predictive"): #e.g ('fixed', (1, 1)) - New Check_MK 2.4 format
+            if params[p][0] in ("fixed", "no_levels", "predictive"):
                 params_new[p] = params[p]            
             elif isinstance(params[p][0], (int, float)) and isinstance(params[p][1], (int, float)):
                 params_new[p] = ('fixed', (params[p][0], params[p][1]))
