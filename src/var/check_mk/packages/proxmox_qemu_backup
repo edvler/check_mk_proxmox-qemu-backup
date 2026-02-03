@@ -10,7 +10,7 @@
            'lib': ['check_mk/base/cee/plugins/bakery/proxmox_qemu_backup.py']},
  'name': 'proxmox_qemu_backup',
  'title': 'Proxmox Backup Logfile Check',
- 'version': '2.0.10',
+ 'version': '2.0.11',
  'version.min_required': '2.3.0',
  'version.packaged': 'cmk-mkp-tool 0.2.0',
  'version.usable_until': None}

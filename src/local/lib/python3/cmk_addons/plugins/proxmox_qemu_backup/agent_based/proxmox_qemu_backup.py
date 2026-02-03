@@ -30,7 +30,9 @@ def params_parser(params):
         else:
             if isinstance(params[p], int) and p == 'running_time':
                 params_new[p] = ('fixed',(float(params[p]),float(params[p] + 60*60))) # The old check only has a single int value for running_time
-            params_new[p] = params[p]
+            else:
+                params_new[p] = params[p]
+
 
     return params_new
 
